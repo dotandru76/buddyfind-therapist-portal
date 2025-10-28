@@ -1,0 +1,504 @@
+/* src/style.css - Tailwind Base Directives and Custom Mappings */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom Color Variables - Crucial for consistent styling */
+:root {
+  --primary-blue: #667eea;
+  --secondary-purple: #764ba2;
+  --light-bg: #f7f8fc;
+  --text-dark: #2c3e50;
+  --text-light: #8492a6;
+  --white: #ffffff;
+  --border-color: #e2e8f0;
+  --shadow-color: rgba(102, 126, 234, 0.15);
+  --error-color: #e53e3e;
+  /* Dark Mode Variables (Default - for light mode) */
+  --dm-bg: var(--light-bg);
+  --dm-text: var(--text-dark);
+}
+
+/* Base Global Styles */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+body {
+  font-family: 'Assistant', sans-serif;
+  background-color: var(--light-bg);
+  color: var(--text-dark);
+  direction: rtl; 
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.hidden { display: none !important; }
+
+/* Logo */
+#logo { position: fixed; top: 20px; left: 25px; width: 220px; height: 60px; cursor: pointer; z-index: 4001; }
+#logo img { width: 100%; height: 100%; object-fit: contain; }
+
+/* --- ANIMATION KEYFRAMES --- */
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes gentlePulse {
+  0% {
+    background-size: 100% 100%;
+    background-position: 0% 0%;
+  }
+  50% {
+    background-size: 105% 105%;
+    background-position: 50% 50%;
+  }
+  100% {
+    background-size: 100% 100%;
+    background-position: 0% 0%;
+  }
+}
+
+@keyframes float {
+    0% {
+        transform: translateY(0px) rotate(0deg);
+        opacity: 0.5;
+    }
+    100% {
+        transform: translateY(-20px) rotate(5deg);
+        opacity: 0.8;
+    }
+}
+/* --- END ANIMATION KEYFRAMES --- */
+
+
+/* Landing Page (Background and Animation Application) */
+#landing-page { 
+  min-height: 100vh; /* FIX: Changed to min-height to allow scrolling */
+  height: auto;      /* FIX: Let height be determined by content */
+  display: flex; 
+  flex-direction: column; 
+  justify-content: center; 
+  align-items: center; 
+  background: linear-gradient(135deg, var(--primary-blue) 0%, var(--secondary-purple) 100%); 
+  padding: 20px; 
+  
+  /* Background Pulse Animation */
+  animation: gentlePulse 20s ease-in-out infinite alternate; 
+  background-size: 100%;
+  
+  /* Setup for Floating Elements */
+  position: relative; 
+  overflow: hidden;
+}
+
+/* Floating Elements Styles */
+#landing-page::before,
+#landing-page::after {
+    content: '';
+    position: absolute;
+    width: 250px;
+    height: 250px;
+    background-color: var(--white);
+    border-radius: 50%; /* Circular shape */
+    opacity: 0.1; /* Very subtle */
+    filter: blur(50px); /* Heavy blur */
+    animation: float 12s ease-in-out infinite alternate;
+    z-index: 10; /* Below the main card */
+}
+
+#landing-page::before {
+    top: 10%;
+    left: 5%;
+}
+
+#landing-page::after {
+    bottom: 15%;
+    right: 10%;
+    width: 300px;
+    height: 300px;
+    animation-delay: 2s; /* Offset start time */
+}
+
+/* Ensure the central card is on top of the floating elements */
+#landing-page > div:first-of-type { 
+    z-index: 20; 
+    position: relative;
+}
+
+.landing-card-animation {
+  animation: fadeIn 0.8s ease-out forwards;
+}
+
+
+/* Questionnaire Modal */
+#questionnaire-modal { 
+    display: flex; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+    background: rgba(44, 62, 80, 0.6); backdrop-filter: blur(5px); z-index: 3000; 
+}
+.questionnaire-content { 
+    background: var(--white); border-radius: 25px; width: 90%; max-width: 800px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); position: relative; max-height: 85vh; display: flex; 
+}
+.questionnaire-main { flex: 1; padding: 40px; overflow-y: auto; display: flex; flex-direction: column; }
+#progress-bar { height: 6px; background: var(--border-color); border-radius: 10px; margin-bottom: 20px; }
+#progress-bar-inner { height: 100%; background: linear-gradient(90deg, var(--primary-blue), var(--secondary-purple)); transition: width 0.4s; border-radius: 10px; width: 0; }
+.question-text { font-size: 24px; font-weight: 600; margin-bottom: 25px; text-align: center; }
+.options-container { display: flex; flex-direction: column; gap: 12px; }
+.option { 
+    background: var(--light-bg); border: 2px solid var(--border-color); padding: 18px 25px; border-radius: 15px; font-size: 16px; cursor: pointer; transition: all 0.3s; text-align: right; 
+}
+.option:hover { border-color: var(--primary-blue); transform: translateY(-2px); }
+.option.selected { background: var(--primary-blue); color: var(--white); border-color: var(--primary-blue); }
+#navigation-controls { display: flex; justify-content: space-between; align-items: center; margin-top: 30px; }
+#back-btn, #next-btn { border: none; padding: 12px 30px; border-radius: 25px; font-size: 16px; font-weight: 600; cursor: pointer; transition: 0.3s; }
+#back-btn { background: none; color: #a0aec0; }
+#next-btn { background: linear-gradient(135deg, var(--primary-blue), var(--secondary-purple)); color: var(--white); box-shadow: 0 5px 15px var(--shadow-color); }
+#next-btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+
+
+/* --- SLIDER STYLES (New Block) --- */
+#age-slider-container {
+    width: 100%;
+    padding: 20px 10px;
+    background: var(--light-bg);
+    border: 2px solid var(--border-color);
+    border-radius: 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#age-slider-value {
+    margin-top: 15px;
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--primary-blue);
+}
+
+.age-slider-input {
+    -webkit-appearance: none; /* Override default appearance */
+    width: 100%;
+    height: 10px;
+    background: #d3d3d3;
+    outline: none;
+    opacity: 0.7;
+    -webkit-transition: .2s;
+    transition: opacity .2s;
+    border-radius: 5px;
+}
+
+.age-slider-input::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary-blue), var(--secondary-purple));
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.age-slider-input::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary-blue), var(--secondary-purple));
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+/* --- END SLIDER STYLES --- */
+
+
+/* Results Page & Cards - DEFAULT (Desktop) */
+#app-content { max-width: 900px; margin: 120px auto 40px; padding: 20px; }
+.results-header { text-align: center; margin-bottom: 40px; }
+.professional-card { 
+    /* Default is Desktop: display: flex */
+    display: flex; 
+    gap: 25px; padding: 25px; background: var(--white); border-radius: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.05); 
+    transition: all 0.3s ease; border: 1px solid var(--border-color); margin-bottom: 20px; 
+}
+.professional-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px var(--shadow-color); }
+.card-image { width: 120px; height: 120px; flex-shrink: 0; }
+.card-image img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 3px solid var(--primary-blue); }
+.card-content { flex: 1; display: flex; flex-direction: column; }
+.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.card-header h3 { font-size: 24px; }
+.card-profession { font-size: 1rem; font-weight: 700; color: var(--primary-blue); margin-bottom: 5px; }
+.card-location { color: var(--text-light); font-size: 15px; margin-top: 5px; }
+.card-bio { color: var(--text-light); line-height: 1.6; margin-bottom: 15px; }
+.card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: auto; }
+.card-tags { display: flex; flex-wrap: wrap; gap: 8px; flex-grow: 1; margin-left: 15px; }
+.card-tags span { background: #f0f4ff; color: var(--primary-blue); padding: 6px 12px; border-radius: 15px; font-size: 13px; font-weight: 600; }
+.contact-btn { 
+    background: linear-gradient(135deg, var(--primary-blue), var(--secondary-purple)); color: white; border: none; padding: 12px 30px; border-radius: 10px; 
+    font-size: 15px; font-weight: 600; cursor: pointer; transition: 0.3s; text-decoration: none; flex-shrink: 0; 
+}
+
+/* Availability Styles */
+.availability-visual { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; color: var(--text-light); margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-color); }
+.days-wrapper { display: flex; gap: 5px; direction: rtl; }
+.day-indicator { display: inline-flex; justify-content: center; align-items: center; width: 24px; height: 24px; border-radius: 5px; background-color: #f1f5f9; color: #94a3b8; font-weight: bold; font-size: 14px; }
+.day-indicator.active { background-color: var(--primary-blue); color: var(--white); }
+
+/* Availability Color Scale */
+.availability-scale-wrapper { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-left: 15px; flex-shrink: 0; min-width: 80px; }
+.availability-scale-label { font-size: 11px; font-weight: 600; color: var(--text-dark); white-space: nowrap; }
+.availability-scale-bar-container { width: 100%; height: 8px; background-color: #e2e8f0; border-radius: 4px; overflow: hidden; }
+.availability-scale-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease-out, background-color 0.5s ease-out; } 
+
+
+/* Custom Tailwind Mappings (CRUCIAL for AuthModal and LandingPage to look good) */
+.text-text-dark { color: var(--text-dark); }
+.text-primary-blue { color: var(--primary-blue); }
+.border-primary-blue { border-color: var(--primary-blue); }
+.focus\:ring-primary-blue:focus { --tw-ring-color: var(--primary-blue); }
+.focus\:border-primary-blue:focus { --tw-border-opacity: 1; border-color: var(--primary-blue); }
+.hover\:bg-secondary-purple:hover { background-color: var(--secondary-purple); }
+.bg-red-50 { background-color: #fef2f2; }
+.text-red-600 { color: #e53e3e; }
+
+
+/* Browse Modal Custom Component Styles */
+#browse-modal { 
+    display: flex; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+    background: rgba(44, 62, 80, 0.6); backdrop-filter: blur(5px); z-index: 3000; 
+}
+.browse-modal-content { padding: 40px; max-width: 600px; background: var(--white); border-radius: 25px; position: relative; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+.close-btn { position: absolute; top: 15px; right: 20px; background: none; border: none; font-size: 30px; color: #a0aec0; cursor: pointer; }
+.filter-group { margin-bottom: 25px; }
+.filter-group h4 { font-size: 16px; color: var(--text-light); margin-bottom: 15px; text-align: right; }
+.category-buttons, .region-buttons { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.category-btn, .region-btn { 
+    background: var(--light-bg); color: var(--text-dark); border: 2px solid var(--border-color); padding: 15px 20px; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; 
+    transition: all 0.3s ease; flex-grow: 1; text-align: center; 
+}
+.category-btn:hover, .region-btn:hover { border-color: var(--primary-blue); }
+.category-btn.selected, .region-btn.selected { background: var(--primary-blue); color: var(--white); border-color: var(--primary-blue); }
+.action-btn { 
+    width: 100%; background: linear-gradient(135deg, var(--primary-blue), var(--secondary-purple)); color: white; border: none; padding: 15px 40px; border-radius: 25px; font-size: 16px; 
+    font-weight: 700; cursor: pointer; transition: 0.3s; box-shadow: 0 5px 15px var(--shadow-color); margin-top: 15px; 
+}
+.action-btn:disabled { opacity: 0.6; cursor: not-allowed; box-shadow: none; }
+
+
+/* --- Dark Mode Support --- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --primary-blue: #93b5ff;
+    --secondary-purple: #a68de3;
+    --light-bg: #1e1e2d; /* Darker background */
+    --text-dark: #f0f2f5; /* Light text for dark background */
+    --text-light: #a0a0a0;
+    --white: #2a2a3a; /* Dark background for elements that were white */
+    --border-color: #3e3e50;
+    --shadow-color: rgba(0, 0, 0, 0.5);
+    /* Dark Mode Variables (Applied) */
+    --dm-bg: #1e1e2d; 
+    --dm-text: #f0f2f5; 
+  }
+  body {
+    background-color: var(--dm-bg);
+    color: var(--dm-text);
+  }
+  /* Apply dark mode styles to cards and light elements */
+  .professional-card, .questionnaire-content, .browse-modal-content, #landing-page > div:first-of-type {
+    background: var(--white); /* Now a dark shade */
+    border-color: var(--border-color);
+  }
+  .option {
+    background: var(--light-bg);
+    color: var(--dm-text);
+    border-color: var(--border-color);
+  }
+  .results-header {
+      background: var(--white); /* Ensure sticky header matches card background */
+  }
+  /* Fix colored elements */
+  .card-tags span { 
+    background: #4a4a6b; 
+    color: var(--primary-blue); 
+  }
+}
+/* --- End Dark Mode Support --- */
+
+
+/* --- RESPONSIVE ADJUSTMENTS FOR MOBILE (< 768px) --- */
+@media (max-width: 768px) { 
+  #logo { width: 180px; height: 50px; top: 15px; left: 25px; } 
+  .questionnaire-content { width: 100%; height: 100%; border-radius: 0; max-height: 100vh; } 
+  
+  /* Results Page - Mobile Specific Styles */
+  
+  /* #landing-page (The full-screen gradient background) must allow content to scroll naturally */
+  #landing-page { 
+      height: auto; 
+      min-height: 100vh; 
+      overflow: visible; 
+  }
+
+  /* Central White Card (The one containing results) */
+  #landing-page > div:first-of-type { 
+      margin-top: 15px !important; 
+      margin-bottom: 80px !important; /* Push card up to leave space for fixed footer */
+      padding: 15px; 
+      border-radius: 25px; 
+      box-shadow: 0 10px 40px var(--shadow-color); /* Use variable for better DM compatibility */
+  }
+
+  .results-header {
+      padding: 10px 0; 
+      margin-bottom: 10px;
+  }
+  .results-header h2 { font-size: 24px; } 
+  .results-header p { font-size: 14px; }
+
+  #results-list-wrapper {
+      padding: 0; 
+      padding-top: 10px;
+  }
+
+  /* Professional Card - Horizontal Layout (like the second example image) */
+  .professional-card { 
+    flex-direction: row; 
+    align-items: flex-start; 
+    gap: 10px; /* Reduced gap slightly more */
+    padding: 12px; /* Smaller padding */
+    margin-bottom: 15px; 
+  }
+  .professional-card:hover { transform: none; box-shadow: 0 5px 20px rgba(0,0,0,0.1); }
+  
+  /* --- FIX: Image and Content Size (Reduced significantly) --- */
+  .card-image { order: 2; width: 60px; height: 60px; flex-shrink: 0; } /* Image Reduced */
+  .card-image img { border-width: 2px; }
+  .card-content { order: 1; flex: 1; } 
+
+  /* Header and text sizing */
+  .card-header h3 { font-size: 17px; } /* Slightly smaller name font */
+  .card-profession { font-size: 13px; }
+  
+  /* Availability Scale (Ensure it fits) */
+  .availability-scale-wrapper { 
+      min-width: 60px; 
+  }
+
+  /* Location */
+  .card-location { display: block; font-size: 13px; margin-top: 2px; }
+
+  /* Bio text - FIX: Displayed on mobile now, styled to be compact */
+  .card-bio-mobile {
+    display: block;
+    font-size: 13px;
+    color: var(--text-dark); /* Use dark text color for better contrast */
+    line-height: 1.4;
+    margin-top: 5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* Limit bio to max 2-3 lines */
+    display: -webkit-box;
+    -webkit-line-clamp: 3; /* Limit to 3 lines */
+    -webkit-box-orient: vertical;
+  }
+  
+  /* Availability Text Display */
+  .availability-days-mobile { 
+      display: block; 
+      font-size: 13px; 
+      color: var(--text-dark); 
+      margin-top: 5px; 
+  }
+  .availability-days-mobile b { font-weight: 600; margin-left: 5px; color: var(--text-dark); }
+  
+  /* Hide the desktop availability visual */
+  .availability-visual { display: none !important; }
+
+  /* --- FIX: Mobile Contact Button Style --- */
+  .mobile-contact-wrapper {
+      width: 100%;
+      margin-top: 10px;
+      text-align: center;
+  }
+  .contact-btn-mobile {
+      background: linear-gradient(135deg, var(--primary-blue), var(--secondary-purple));
+      color: white;
+      border: none;
+      padding: 8px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.3s;
+      width: 100%; /* Full width in the content area */
+  }
+
+
+  /* Footer and Contact Button (Hide original footer in card) */
+  .card-footer { display: none; } 
+  .contact-btn { display: none; } 
+
+
+  /* Fixed Bottom Bar (Visible on mobile only) */
+  .fixed-bottom-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      z-index: 1000;
+      padding: 12px 20px;
+      box-shadow: 0 -5px 20px rgba(0,0,0,0.15);
+  }
+  /* FIX: ניטרול כפתור 'מצא לי עוד' והרחבת 'חזור' */
+  .fixed-bottom-bar .next-btn {
+      display: none;
+  }
+  .fixed-bottom-bar .back-btn {
+      flex-basis: 95%; /* תפוס את רוב הרוחב אם הכפתור השני מוסתר */
+      background: none;
+      color: var(--primary-blue);
+      border: 1px solid var(--primary-blue);
+      padding: 10px 25px;
+      border-radius: 25px;
+      font-size: 16px;
+      font-weight: 600;
+  }
+}
+/* style.css (הוסף את הבלוק הזה לפני ה-Results Page & Cards) */
+
+/* --- LOADER STYLES (Spinner) --- */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.button-spinner {
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-top: 4px solid var(--white); /* White top for visibility */
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto; /* Center the spinner in the button */
+}
+
+/* Fallback/Generic Info Card Spinner (used in Results.jsx) */
+.spinner-container {
+    display: flex; justify-content: center; align-items: center; padding: 20px;
+}
+.spinner {
+    border: 5px solid #f3f3f3;
+    border-top: 5px solid var(--primary-blue);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+}
+
+/* ... (שאר הקוד של style.css ללא שינוי) ... */
