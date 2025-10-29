@@ -1,26 +1,10 @@
-// src/components/ProfileEditor.jsx (Final Version - Includes Availability Render Fix)
+// src/components/ProfileEditor.jsx (Final Synced Version)
 import React, { useState, useEffect, useRef } from 'react';
-import ImageCropper from './ImageCropper'; // Ensure ImageCropper.jsx exists
-import { getCroppedImg } from '../utils/cropImage'; // Ensure cropImage.js exists
+import ImageCropper from './ImageCropper';
+import { getCroppedImg } from '../utils/cropImage';
 
-// --- Placeholder Data (Keep for potential fallback) ---
-const MOCK_PROFESSIONS = [
-  { id: 1, name: 'פיזיותרפיה' }, { id: 2, name: 'ריפוי בעיסוק' },
-  { id: 3, name: 'פסיכולוגיה' }, { id: 4, name: 'עבודה סוציאלית קלינית' },
-  { id: 5, name: 'טיפול זוגי ומשפחתי' }, { id: 6, name: 'טיפול באמנויות' },
-  { id: 7, name: 'קלינאות תקשורת' }, { id: 8, name: 'דיאטנות קלינית' },
-  // Add other professions if needed based on your DB 'professions' table
-];
-const MOCK_SPECIALTIES = [
-    { id: 1, name: 'שיקום אורתופדי', profession_id: 1 }, { id: 2, name: 'פיזיותרפיית ספורט', profession_id: 1 },
-    { id: 13, name: 'התפתחות הילד', profession_id: 2 }, { id: 14, name: 'שיקום פיזי ונוירולוגי', profession_id: 2 },
-    { id: 18, name: 'פסיכולוגיה קלינית', profession_id: 3 },
-    // Add other specialties if needed based on your DB 'specialties' table
-];
-
-// --- Constants ---
-const daysOfWeek = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
-const timeSlots = ['בוקר (8-12)', 'צהריים (12-16)', 'ערב (16-20)'];
+// --- MOCK DATA (REMOVED) ---
+// Mocks are no longer needed as we fetch everything
 
 // --- Helper Components ---
 const AlertMessage = ({ type, message, onDismiss }) => {
@@ -47,15 +31,22 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
         years_of_practice: 0, profile_image_url: '/default-profile.png',
         specialties: [], locations: [], availability: {}
     });
+    
+    // --- **NEW**: State for dynamic definitions ---
+    const [professions, setProfessions] = useState([]);
+    const [allSpecialties, setAllSpecialties] = useState([]);
+    const [filteredSpecialties, setFilteredSpecialties] = useState([]);
+    const [defRegions, setDefRegions] = useState([]); // For regions dropdown
+    const [defDays, setDefDays] = useState([]);       // For availability table
+    const [defSlots, setDefSlots] = useState([]);     // For availability table
+    // --- End New State ---
+
     const [loading, setLoading] = useState(true);
     const [savingProfile, setSavingProfile] = useState(false);
     const [savingAvailability, setSavingAvailability] = useState(false);
     const [savingImage, setSavingImage] = useState(false);
     const [message, setMessage] = useState(null);
     const [error, setError] = useState(null);
-    const [professions, setProfessions] = useState([]);
-    const [allSpecialties, setAllSpecialties] = useState([]);
-    const [filteredSpecialties, setFilteredSpecialties] = useState([]);
     const fileInputRef = useRef(null);
     const [imageToCrop, setImageToCrop] = useState(null);
     const [isCropping, setIsCropping] = useState(false);
@@ -75,10 +66,12 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
 
             try {
                 const fetchOptions = { headers: { 'Authorization': `Bearer ${authToken}` } };
+                // **MODIFIED**: Fetching options and profile in parallel
                 const [profileRes, optionsRes] = await Promise.all([
                     fetch(`${API_URL}/api/professionals/me`, fetchOptions),
-                    fetch(`${API_URL}/api/data/options`, fetchOptions) // Assuming options also need auth
+                    fetch(`${API_URL}/api/data/options`, fetchOptions) 
                 ]);
+                
                 console.log(`ProfileEditor: Statuses - Profile: ${profileRes.status}, Options: ${optionsRes.status}`);
                 if (!isMounted) return;
 
@@ -101,12 +94,15 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                 console.log("ProfileEditor: Fetched data successfully.");
 
                 if (isMounted) {
-                    setProfessions(optionsData.professions || MOCK_PROFESSIONS);
-                    setAllSpecialties(optionsData.specialties || MOCK_SPECIALTIES);
+                    // **MODIFIED**: Set all definitions from API
+                    setProfessions(optionsData.professions || []);
+                    setAllSpecialties(optionsData.specialties || []);
+                    setDefRegions(optionsData.regions || []); // e.g., [{region_key: 'center', ...}]
+                    setDefDays(optionsData.days || []);       // e.g., ['ראשון', 'שני', ...]
+                    setDefSlots(optionsData.slots || []);     // e.g., ['בוקר (8-12)', ...]
 
                     let availability = {};
                     try {
-                        // Ensure profileData.availability is handled correctly (might be object or string)
                         if (typeof profileData.availability === 'string' && profileData.availability) {
                              availability = JSON.parse(profileData.availability);
                         } else if (typeof profileData.availability === 'object' && profileData.availability !== null) {
@@ -116,15 +112,15 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
 
                     setFormData({
                         full_name: profileData.full_name || '',
-                        email: profileData.email || '', // Email is usually set by user table, good to display
+                        email: profileData.email || '',
                         phone_number: profileData.phone_number || '',
                         bio: profileData.bio || '',
                         profession_id: profileData.profession_id || '',
                         years_of_practice: profileData.years_of_practice || 0,
                         profile_image_url: profileData.profile_image_url || '/default-profile.png',
-                        specialties: profileData.specialty_ids || [], // Expecting an array of IDs
-                        locations: profileData.locations || [], // Expecting an array of objects {id, city, region}
-                        availability: availability || {}, // Ensure it's always an object
+                        specialties: profileData.specialty_ids || [], 
+                        locations: profileData.locations || [], 
+                        availability: availability || {}, 
                     });
                     console.log("ProfileEditor: Set states successfully.");
                 }
@@ -132,8 +128,6 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                 console.error('ProfileEditor: Initial fetch CATCH block:', err);
                 if (err.responseStatus) { console.error('Initial fetch Response Status:', err.responseStatus); console.error('Initial fetch Response Body:', err.responseBody); }
                  if (isMounted) setError(`שגיאה בטעינת נתונים: ${err.message}`);
-                 // Optionally set fallback data here if needed
-                 // setProfessions(MOCK_PROFESSIONS); setAllSpecialties(MOCK_SPECIALTIES);
             } finally {
                 console.log("ProfileEditor: --- FINALLY BLOCK ---");
                 if (isMounted) { console.log("ProfileEditor: Setting loading = false"); setLoading(false); }
@@ -142,10 +136,10 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
         };
         fetchInitialData();
         return () => { isMounted = false; console.log("ProfileEditor: Cleanup effect."); };
-    }, [authToken, API_URL, user?.professionalId, onLogout]); // Dependency includes professionalId
+    }, [authToken, API_URL, user?.professionalId, onLogout]);
 
 
-    // --- Filter specialties ---
+    // --- Filter specialties (No change) ---
     useEffect(() => {
          if (formData.profession_id && allSpecialties?.length > 0) {
              const professionIdNum = parseInt(formData.profession_id, 10);
@@ -156,28 +150,29 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
      }, [formData.profession_id, allSpecialties]);
 
 
-    // --- Handlers ---
+    // --- Handlers (No change) ---
     const handleChange = (e) => {
          const { name, value, type } = e.target;
          setFormData(prev => ({ ...prev, [name]: type === 'number' ? parseInt(value, 10) || 0 : value }));
-         if (name === 'profession_id') { setFormData(prev => ({ ...prev, specialties: [] })); } // Clear specialties on profession change
-         setMessage(null); setError(null); // Clear messages on any change
+         if (name === 'profession_id') { setFormData(prev => ({ ...prev, specialties: [] })); }
+         setMessage(null); setError(null);
     };
     const handleSpecialtyToggle = (specialtyId) => {
         setFormData(prev => ({ ...prev, specialties: prev.specialties.includes(specialtyId) ? prev.specialties.filter(id => id !== specialtyId) : [...prev.specialties, specialtyId] }));
         setMessage(null); setError(null);
     };
+    // **MODIFIED**: Location handler now handles 'region_key' from dropdown
     const handleLocationChange = (index, field, value) => {
         const updatedLocations = [...formData.locations];
         if (field === 'city') updatedLocations[index].city = value;
-        if (field === 'region') updatedLocations[index].region = value;
+        if (field === 'region') updatedLocations[index].region = value; // value is now 'center', 'north' etc.
         setFormData(prev => ({ ...prev, locations: updatedLocations }));
         setMessage(null); setError(null);
     };
     const addLocation = () => { setFormData(prev => ({ ...prev, locations: [...prev.locations, { city: '', region: '' }] })); setMessage(null); setError(null); };
     const removeLocation = (index) => { setFormData(prev => ({ ...prev, locations: prev.locations.filter((_, i) => i !== index) })); setMessage(null); setError(null); };
     const handleAvailabilityToggle = (day, timeSlot) => {
-         const currentAvailability = formData.availability || {}; // Ensure availability object exists
+         const currentAvailability = formData.availability || {};
          const dayAvailability = currentAvailability[day] || [];
          const isSelected = dayAvailability.includes(timeSlot);
          const updatedDayAvailability = isSelected ? dayAvailability.filter(slot => slot !== timeSlot) : [...dayAvailability, timeSlot];
@@ -188,7 +183,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
          setMessage(null); setError(null);
     };
 
-    // --- Image Cropper Logic ---
+    // --- Image Cropper Logic (No change) ---
     const handleImageClick = () => { if (fileInputRef.current) fileInputRef.current.value = null; fileInputRef.current?.click(); };
     const onFileChange = (e) => {
         const file = e.target.files?.[0]; if (!file) return;
@@ -218,15 +213,15 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
     const handleProfileSubmit = async (e) => {
         e.preventDefault(); setSavingProfile(true); setError(null); setMessage(null);
         try {
-            // Exclude fields not needed for the PUT request or handled separately
             const { profile_image_url, email, availability, ...payload } = formData;
             payload.profession_id = parseInt(payload.profession_id, 10) || null;
             payload.years_of_practice = parseInt(payload.years_of_practice, 10) || 0;
-            payload.specialties = payload.specialties || []; // Ensure it's an array
-            // Ensure locations only contain city and region, and filter empty cities
+            payload.specialties = payload.specialties || []; 
+            
+            // **MODIFIED**: Ensure locations have valid region_key
             payload.locations = (payload.locations || [])
-                .map(loc => ({ city: loc.city?.trim(), region: loc.region }))
-                .filter(loc => loc.city);
+                .map(loc => ({ city: loc.city?.trim(), region: loc.region })) // region is now the key
+                .filter(loc => loc.city && loc.region); // Must have both city and region
 
             const res = await fetch(`${API_URL}/api/professionals/me`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` }, body: JSON.stringify(payload) });
             if (res.status === 401 || res.status === 403) { onLogout(); return; }
@@ -235,10 +230,12 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
         } catch (err) { console.error('Profile Update error:', err); setError(err.message || 'שגיאה בעדכון הפרופיל.'); }
         finally { setSavingProfile(false); }
     };
+    
+    // **MODIFIED**: This handler is now much simpler, it just sends the state.
+    // The backend does the validation against the DB.
     const handleAvailabilitySubmit = async () => {
         setSavingAvailability(true); setError(null); setMessage(null);
         try {
-             // Send the current availability object from state
              const res = await fetch(`${API_URL}/api/professionals/me/availability`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` }, body: JSON.stringify({ availability: formData.availability || {} }) });
              if (res.status === 401 || res.status === 403) { onLogout(); return; }
              const data = await res.json(); if (!res.ok) { throw new Error(data.error || 'Update failed'); }
@@ -249,10 +246,8 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
 
     // --- Render ---
     if (loading) { return <div className="text-center p-10"><div className="spinner"></div></div>; }
-    // If loading failed critically (e.g., couldn't get email), show only error
     if (error && !formData.email) { return <AlertMessage type="error" message={error} onDismiss={() => setError(null)} />; }
 
-    // Main Render
     return (
         <div className="space-y-8 md:space-y-12">
             {isCropping && ( <ImageCropper imageSrc={imageToCrop} onCropComplete={onCropComplete} onCancel={() => setIsCropping(false)} /> )}
@@ -263,7 +258,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
             <form onSubmit={handleProfileSubmit} className="bg-white p-6 md:p-8 rounded-lg shadow w-full mx-auto text-right">
                 <h3 className="text-xl font-bold text-text-dark mb-6 border-b pb-3">פרטי פרופיל ומידע מקצועי</h3>
                 <div className="flex flex-col-reverse md:flex-row gap-8 md:gap-12">
-                    {/* Image Column */}
+                    {/* Image Column (No change) */}
                     <div className="w-full md:w-56 flex flex-col items-center space-y-5 flex-shrink-0">
                          <div className="relative cursor-pointer group" onClick={handleImageClick} title="לחץ/י להחלפת תמונה">
                               <div className="w-32 h-32 md:w-36 md:h-36 rounded-full overflow-hidden border-4 border-primary-blue/60 shadow-lg bg-gray-100 flex items-center justify-center">
@@ -282,16 +277,16 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
 
                     {/* Details Column */}
                     <div className="flex-1 space-y-6">
-                        {/* Full Name */}
+                        {/* Full Name (No change) */}
                         <div> <label htmlFor="full_name" className="block text-sm font-medium text-gray-700 mb-1">שם מלא</label> <input type="text" id="full_name" name="full_name" value={formData.full_name} onChange={handleChange} required className="block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-blue/50 focus:border-primary-blue"/> </div>
-                        {/* Profession & Years */}
+                        {/* Profession & Years (No change) */}
                         <div className="grid grid-cols-2 gap-4">
                              <div> <label htmlFor="profession_id" className="block text-sm font-medium text-gray-700 mb-1">מקצוע</label> <select id="profession_id" name="profession_id" value={formData.profession_id} onChange={handleChange} required className="block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-blue/50 focus:border-primary-blue bg-white appearance-none pr-8 bg-no-repeat bg-right" style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, backgroundPosition: 'left 0.5rem center', backgroundSize: '1.5em 1.5em' }}> <option value="" disabled>-- בחר מקצוע --</option> {(professions || []).map(p => ( <option key={p.id} value={p.id}>{p.name}</option> ))} </select> </div>
                              <div> <label htmlFor="years_of_practice" className="block text-sm font-medium text-gray-700 mb-1">שנות נסיון</label> <input type="number" id="years_of_practice" name="years_of_practice" value={formData.years_of_practice} onChange={handleChange} min="0" max="60" className="block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-blue/50 focus:border-primary-blue"/> </div>
                         </div>
-                        {/* Bio */}
+                        {/* Bio (No change) */}
                         <div> <label htmlFor="bio" className="block text-sm font-medium text-gray-700 mb-1">קצת עלי / גישה טיפולית</label> <textarea id="bio" name="bio" value={formData.bio || ''} onChange={handleChange} rows="4" placeholder="..." className="block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-blue/50 focus:border-primary-blue resize-none"/> </div>
-                        {/* Specialties */}
+                        {/* Specialties (No change) */}
                         <div>
                            <label className="block text-sm font-medium text-gray-700 mb-2">התמחויות</label>
                            {formData.profession_id ? (
@@ -304,22 +299,38 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                                </div>
                            ) : ( <p className="text-xs text-gray-500">נא לבחור מקצוע להצגת התמחויות.</p> )}
                         </div>
-                        {/* Locations */}
+                        
+                        {/* --- LOCATIONS (MODIFIED) --- */}
                         <div>
                              <label className="block text-sm font-medium text-gray-700 mb-2">מיקומי קליניקה</label>
-                            <div className="space-y-2">
+                            <div className="space-y-3">
                                 {(formData.locations || []).map((loc, index) => (
-                                    <div key={index} className="flex items-center gap-2 p-2 border border-gray-200 rounded-md bg-gray-50/70">
-                                         {/* Consider adding Region dropdown here */}
-                                         <input type="text" placeholder="עיר" value={loc.city || ''} onChange={(e) => handleLocationChange(index, 'city', e.target.value)} className="flex-1 px-3 py-1 border border-gray-300 rounded-md text-sm shadow-sm"/>
-                                         <button type="button" onClick={() => removeLocation(index)} title="הסר מיקום" className="text-red-400 hover:text-red-600 font-bold text-xl px-1">&times;</button>
+                                    <div key={index} className="grid grid-cols-3 items-center gap-2 p-2 border border-gray-200 rounded-md bg-gray-50/70">
+                                         {/* City (col-span-2) */}
+                                         <input type="text" placeholder="עיר" value={loc.city || ''} onChange={(e) => handleLocationChange(index, 'city', e.target.value)} className="col-span-2 px-3 py-1.5 border border-gray-300 rounded-md text-sm shadow-sm"/>
+                                         
+                                         {/* **MODIFIED**: Region Dropdown (col-span-1) */}
+                                         <select 
+                                            value={loc.region || ''} 
+                                            onChange={(e) => handleLocationChange(index, 'region', e.target.value)} 
+                                            className="col-span-1 px-2 py-1.5 border border-gray-300 rounded-md text-sm shadow-sm bg-white"
+                                          >
+                                            <option value="" disabled>-- בחר אזור --</option>
+                                            {(defRegions || []).map(r => (
+                                                <option key={r.region_key} value={r.region_key}>{r.region_name_he}</option>
+                                            ))}
+                                         </select>
+                                         
+                                         {/* Remove button (col-span-3, centered) */}
+                                         <button type="button" onClick={() => removeLocation(index)} title="הסר מיקום" className="col-span-3 text-xs text-red-500 hover:text-red-700 hover:underline text-center">הסר מיקום זה</button>
                                     </div>
                                 ))}
                             </div>
-                            <button type="button" onClick={addLocation} className="mt-2 text-sm text-primary-blue hover:underline font-medium">+ הוסף מיקום</button>
-                             {/* TODO: Add "Online Only" checkbox */}
+                            <button type="button" onClick={addLocation} className="mt-3 text-sm text-primary-blue hover:underline font-medium">+ הוסף מיקום</button>
                         </div>
-                        {/* Save Button */}
+                        {/* --- END LOCATIONS --- */}
+
+                        {/* Save Button (No change) */}
                         <div className="pt-6 border-t border-gray-200 flex justify-start">
                              <button type="submit" disabled={savingProfile || savingImage || savingAvailability} className="inline-flex items-center justify-center py-2.5 px-6 border border-transparent rounded-lg shadow-sm text-base font-semibold text-white transition duration-200 ease-in-out bg-primary-blue hover:bg-secondary-purple focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-blue disabled:opacity-60 disabled:cursor-not-allowed">
                                 {savingProfile ? <ButtonSpinner /> : 'שמור שינויי פרופיל'}
@@ -329,7 +340,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                 </div>
             </form>
 
-            {/* Availability Section */}
+            {/* --- AVAILABILITY SECTION (MODIFIED) --- */}
             <div className="bg-white p-6 md:p-8 rounded-lg shadow w-full mx-auto text-right">
                 <h3 className="text-xl font-bold text-text-dark mb-4">ניהול זמינות שבועית</h3>
                 <p className="text-sm text-gray-500 mb-6">סמן/י את משבצות הזמן הפנויות עבורך.</p>
@@ -338,24 +349,23 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                          <thead className="bg-gray-50">
                             <tr>
                                 <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200">יום</th>
-                                {timeSlots.map(slot => ( <th key={slot} className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200">{slot}</th> ))}
+                                {/* **MODIFIED**: Render slots dynamically */}
+                                {defSlots.map(slot => ( <th key={slot} className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200">{slot}</th> ))}
                             </tr>
                         </thead>
                         <tbody className="bg-white">
-                            {daysOfWeek.map(day => (
+                            {/* **MODIFIED**: Render days dynamically */}
+                            {defDays.map(day => (
                                 <tr key={day} className="divide-x divide-gray-200">
                                     <td className="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900 border border-gray-200">{day}</td>
-                                    {timeSlots.map(slot => {
-                                        // *** THE FIX FOR RENDER ERROR IS HERE ***
+                                    {/* **MODIFIED**: Render slots dynamically */}
+                                    {defSlots.map(slot => {
                                         const isSelected = formData.availability && formData.availability[day]?.includes(slot);
-                                        // ****************************************
                                         return (
                                             <td key={slot}
                                                 className={`px-1 py-4 md:px-3 md:py-3 border border-gray-200 cursor-pointer transition-colors duration-150 ease-in-out text-center ${isSelected ? 'bg-primary-blue/80 hover:bg-primary-blue' : 'bg-white hover:bg-primary-blue/10'}`}
                                                 onClick={() => handleAvailabilityToggle(day, slot)}
                                                 title={`${day}, ${slot} - ${isSelected ? 'פנוי/ה (בטל)' : 'לא פנוי/ה (הוסף)'}`}>
-                                                {/* Visual indicator (optional) */}
-                                                {/* {isSelected && <span className="text-white text-xs">✓</span>} */}
                                             </td>
                                         );
                                     })}
@@ -371,7 +381,6 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                     </button>
                  </div>
             </div>
-             {/* TODO: Add Financial/Plan Section */}
         </div>
     );
 };
