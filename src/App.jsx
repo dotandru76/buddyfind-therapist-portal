@@ -1,284 +1,210 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import ProfileEditor from './components/ProfileEditor';
+// src/App.jsx (FOR ADMIN PORTAL ONLY - Final Version with POST fix)
+import React, { useState, useEffect } from 'react';
+import LoginModal from './components/LoginModal'; // Ensure LoginModal.jsx exists in ./components
+import ProfileEditor from './components/ProfileEditor'; // Ensure ProfileEditor.jsx exists in ./components
+import RegisterModal from './components/RegisterModal'; // Ensure RegisterModal.jsx exists in ./components
 
+// Use environment variable for API URL if available, otherwise default
 const API_URL = import.meta.env.VITE_API_URL || 'https://buddyfind-api.onrender.com';
 
-// --- Login Component (עם העיצוב שלנו) ---
-const LoginModal = ({ handleLogin, loading, error, onRegisterClick }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+function App() {
+  const [authToken, setAuthToken] = useState(null); // Initialize as null
+  const [user, setUser] = useState(null); // Will store { userId, professionalId, userType }
+  const [loading, setLoading] = useState(false); // General loading state
+  const [error, setError] = useState(''); // General error display
+  const [currentView, setCurrentView] = useState('loading'); // Start in loading state: 'loading', 'login', 'register', 'dashboard'
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    handleLogin(email, password);
-  };
-
-  return (
-    // רקע אפור בהיר מתוך style.css
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gray-100"> 
-      <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
-        <h2 className="text-2xl font-bold text-center text-text-dark">ברוכים הבאים, מטפלים</h2>
-        <p className="text-center text-sm text-text-light">התחברו או צרו חשבון כדי להתחיל.</p>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <input
-              id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-              required placeholder="כתובת אימייל"
-              className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-primary-blue focus:border-primary-blue text-left"
-              style={{ direction: 'ltr' }}
-            />
-          </div>
-          <div>
-            <input
-              id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-              required placeholder="סיסמה"
-              className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-primary-blue focus:border-primary-blue text-left"
-              style={{ direction: 'ltr' }}
-            />
-          </div>
-          <div className="flex justify-end text-sm">
-            <a href="#" className="font-medium text-primary-blue hover:text-secondary-purple">
-              שכחת סיסמה?
-            </a>
-          </div>
-          {error && (
-            <p className="text-red-600 text-sm text-center p-2 bg-red-50 rounded">{error}</p>
-          )}
-          <button
-            type="submit" disabled={loading}
-            className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-blue hover:bg-secondary-purple focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-blue disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? <div className="spinner w-5 h-5 border-t-white border-r-white border-b-white border-l-primary-blue"></div> : 'התחבר'}
-          </button>
-        </form>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-white px-2 text-gray-400">או</span>
-        </div>
-        <button
-          type="button" onClick={onRegisterClick}
-          className="w-full flex justify-center py-2.5 px-4 border border-primary-blue text-primary-blue rounded-md shadow-sm text-sm font-medium hover:bg-primary-blue/5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-blue"
-        >
-          חדשים ב-BuddyFind? צרו חשבון
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// --- Register Component (עם העיצוב שלנו) ---
-const RegisterModal = ({ handleRegister, loading, error, onLoginClick }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (password !== confirmPassword) {
-      alert('הסיסמאות לא תואמות'); // TODO: להחליף ב-setError
-      return;
-    }
-    handleRegister({ email, password, full_name: fullName });
-  };
-
-  return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gray-100">
-      <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
-        <h2 className="text-2xl font-bold text-center text-text-dark">הרשמה למערכת</h2>
-        <p className="text-center text-sm text-text-light">צרו חשבון חדש כדי להצטרף</p>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)}
-              required placeholder="שם מלא"
-              className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-primary-blue focus:border-primary-blue"
-            />
-          </div>
-          <div>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-              required placeholder="כתובת דוא״ל"
-              className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-primary-blue focus:border-primary-blue text-left"
-              style={{ direction: 'ltr' }}
-            />
-          </div>
-          <div>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-              required minLength="6" placeholder="סיסמה (לפחות 6 תווים)"
-              className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-primary-blue focus:border-primary-blue text-left"
-              style={{ direction: 'ltr' }}
-            />
-          </div>
-          <div>
-            <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
-              required minLength="6" placeholder="אימות סיסמה"
-              className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-primary-blue focus:border-primary-blue text-left"
-              style={{ direction: 'ltr' }}
-            />
-          </div>
-          {error && (
-            <p className="text-red-600 text-sm text-center p-2 bg-red-50 rounded">{error}</p>
-          )}
-          <button
-            type="submit" disabled={loading}
-            className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-blue hover:bg-secondary-purple focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-blue disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? <div className="spinner w-5 h-5 border-t-white border-r-white border-b-white border-l-primary-blue"></div> : 'הרשמה'}
-          </button>
-        </form>
-        <div className="text-center text-sm">
-            <button type="button" onClick={onLoginClick} className="font-medium text-primary-blue hover:text-secondary-purple underline">
-                כבר יש לך חשבון? התחבר
-            </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// --- Main App Component (עם הלוגיקה הנכונה) ---
-const App = () => {
-  console.log("App component function started");
-  
-  const [authToken, setAuthToken] = useState(localStorage.getItem('therapist_token'));
-  const [user, setUser] = useState(null);
-  const [currentView, setCurrentView] = useState('login');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  const switchToRegister = useCallback(() => { setError(null); setCurrentView('register'); }, []);
-  const switchToLogin = useCallback(() => { setError(null); setCurrentView('login'); }, []);
-
-  const handleLogout = useCallback(() => {
-    setAuthToken(null);
-    setUser(null);
-    localStorage.removeItem('therapist_token');
-    setCurrentView('login');
-  }, []);
-
-  // Validate initial token on mount
+  // Effect to handle initial token check and decoding on component mount
   useEffect(() => {
-    const initialToken = localStorage.getItem('therapist_token');
-    if (initialToken) {
-      console.log("App Mount Effect: Found initial token.");
+    console.log("App Mount Effect: Checking for initial token..."); // Debug Log
+    const token = localStorage.getItem('therapist_token');
+    if (token) {
+      console.log("App Mount Effect: Found initial token."); // Debug Log
       try {
-        const decodedToken = JSON.parse(atob(initialToken.split('.')[1]));
-        setUser({
-          userId: decodedToken.userId || 'unknown',
-          professionalId: decodedToken.professionalId || null
-        });
-        setAuthToken(initialToken);
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        // Basic check for expiration
+        if (payload.exp * 1000 > Date.now()) {
+          // Check if it's a valid professional token
+          if (payload.userType === 'professional' && payload.professionalId) {
+            console.log("App Mount Effect: Token valid and is professional. Setting state."); // Debug Log
+            setUser({ userId: payload.userId, professionalId: payload.professionalId, userType: payload.userType });
+            setAuthToken(token); // Set the token state
+            setCurrentView('dashboard'); // Set view to dashboard
+          } else {
+            console.warn("App Mount Effect: Token valid but not for a professional user or missing ID."); // Debug Log
+            handleLogout(); // Force logout
+            setError('חשבון לא מוגדר כמטפל.');
+            setCurrentView('login'); // Ensure view is login
+          }
+        } else {
+          console.warn("App Mount Effect: Token expired."); // Debug Log
+          handleLogout(); // Token expired
+          setError('פג תוקף ההתחברות, אנא התחבר מחדש.');
+          setCurrentView('login'); // Ensure view is login
+        }
       } catch (e) {
-        console.error("App Mount Effect: Invalid token found.", e);
-        handleLogout();
+        console.error("App Mount Effect: Error decoding initial token:", e); // Debug Log
+        handleLogout(); // Invalid token format
+        setError('אסימון לא תקין, אנא התחבר מחדש.');
+        setCurrentView('login'); // Ensure view is login
       }
     } else {
-      console.log("App Mount Effect: No initial token found.");
-      setUser(null);
+      console.log("App Mount Effect: No initial token found."); // Debug Log
+      setCurrentView('login'); // No token, go to login
     }
-  }, [handleLogout]); // הוספנו את handleLogout כתלות
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run only once on mount
 
-  // Login Handler
-  const handleLogin = useCallback(async (email, password) => {
+  // Effect to update localStorage and user state when authToken changes state
+   useEffect(() => {
+       console.log("AuthToken Effect: AuthToken changed:", !!authToken); // Debug Log
+       if (authToken) {
+           localStorage.setItem('therapist_token', authToken);
+           try {
+               const payload = JSON.parse(atob(authToken.split('.')[1]));
+               // Ensure userType is professional AND professionalId exists
+               if(payload.userType === 'professional' && payload.professionalId){
+                   console.log("AuthToken Effect: Setting user state:", payload); // Debug Log
+                   setUser({ userId: payload.userId, professionalId: payload.professionalId, userType: payload.userType });
+                   // Only switch view if not already on dashboard (prevents flicker on initial load)
+                   if(currentView !== 'dashboard') {
+                       console.log("AuthToken Effect: Switching view to dashboard."); // Debug Log
+                       setCurrentView('dashboard');
+                   }
+               } else {
+                   // Logged in successfully but server didn't return expected data for admin
+                   console.error("AuthToken Effect: Logged in user is not a valid professional for admin portal."); // Debug Log
+                   handleLogout();
+                   setError('שגיאה: חשבון אינו מוגדר כמטפל.');
+               }
+           } catch (e) {
+               console.error("AuthToken Effect: Error decoding token after state update:", e); // Debug Log
+               handleLogout();
+               setError('שגיאה בעיבוד נתוני התחברות.');
+           }
+       } else {
+           console.log("AuthToken Effect: Clearing token and user state."); // Debug Log
+           localStorage.removeItem('therapist_token');
+           setUser(null);
+           // Only switch view if not already on login/register
+           if(currentView !== 'login' && currentView !== 'register') {
+               console.log("AuthToken Effect: Switching view to login."); // Debug Log
+               setCurrentView('login');
+           }
+       }
+   // Only depend on authToken, view change is handled internally
+   // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, [authToken]);
+
+
+  // --- Authentication Handlers ---
+  const handleLogin = async (credentials) => {
+    console.log("handleLogin started", credentials); // Debug Log
     setLoading(true);
-    setError(null);
+    setError('');
     try {
       const res = await fetch(`${API_URL}/api/login`, {
+        // *** THE FIX IS HERE: method: 'POST' ***
         method: 'POST',
+        // ***************************************
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify(credentials),
       });
+      console.log("handleLogin: Fetch response status:", res.status); // Debug Log
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'ההתחברות נכשלה');
-      
-      console.log("Login successful:", data);
-      localStorage.setItem('therapist_token', data.token);
-      setUser({
-        userId: data.userId,
-        professionalId: data.professionalId || null
-      });
-      setAuthToken(data.token);
-    } catch (err) {
-      console.error('Login error:', err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, []); // הסרנו תלויות מיותרות
+      console.log("handleLogin: Fetch response data:", data); // Debug Log
 
-  // Register Handler
-  const handleRegister = useCallback(async (userData) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`${API_URL}/api/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userData)
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'ההרשמה נכשלה');
-      
-      console.log("Registration successful:", data);
-      setError(null);
-      switchToLogin();
-      alert('ההרשמה הצליחה! כעת תוכל להתחבר');
-    } catch (err) {
-      console.error('Registration error:', err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [switchToLogin]);
+      if (!res.ok) {
+         // Check specific server errors first
+         if (res.status === 403 && data.error?.includes('הפרופיל המקצועי חסר')) {
+             throw new Error(data.error);
+         }
+         // Use the error message from the JSON body if available, otherwise use statusText
+         throw new Error(data.error || res.statusText || `Login failed: ${res.status}`);
+      }
 
-  // Dashboard View
-  const DashboardView = () => (
-    <div className="min-h-screen p-4 md:p-8 bg-gray-100 text-right">
-      <header className="max-w-7xl mx-auto flex justify-between items-center mb-6 md:mb-10 pb-4 border-b border-gray-300">
-        <h1 className="text-2xl md:text-3xl font-bold text-text-dark">לוח בקרה למטפל</h1>
-        <button
-          onClick={handleLogout}
-          className="text-sm px-4 py-2 border border-red-400 text-red-600 rounded-md hover:bg-red-50 transition duration-150 ease-in-out"
-        >
-          התנתק
-        </button>
-      </header>
-      <main className="max-w-7xl mx-auto">
-        {/* ProfileEditor צריך עכשיו לקבל את ה-props הנכונים */}
-        <ProfileEditor 
-          authToken={authToken} 
-          API_URL={API_URL}
-          user={user} // העברנו את אובייקט המשתמש
-          onLogout={handleLogout} // העברנו פונקציית התנתקות
-        />
+       // Crucial check for Admin Portal: Ensure professionalId exists
+       if (data.professionalId === null || data.professionalId === undefined) {
+           console.error("Login successful but professionalId is missing for admin portal:", data);
+           throw new Error("התחברת בהצלחה אך חשבונך אינו מוגדר כמטפל.");
+       }
+
+      console.log("handleLogin: Login successful, setting auth token."); // Debug Log
+      setAuthToken(data.token); // This triggers the useEffect to update user and view
+
+    } catch (err) {
+      console.error('handleLogin: Error during login fetch:', err); // Debug Log
+      setError(err.message || 'התחברות נכשלה.');
+      setLoading(false); // Ensure loading stops on error, as useEffect won't run
+    }
+    // setLoading(false) is implicitly handled by setAuthToken triggering useEffect on success
+  };
+
+  const handleRegister = async (details) => {
+     setLoading(true); setError('');
+     try {
+         if (!details.full_name?.trim()) { throw new Error('יש למלא שם מלא להרשמת מטפל.'); }
+         const res = await fetch(`${API_URL}/api/register`, {
+             method: 'POST',
+             headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify({ email: details.email, password: details.password, full_name: details.full_name }),
+         });
+         const data = await res.json();
+         if (!res.ok) { throw new Error(data.error || `Registration failed: ${res.status}`); }
+         alert('ההרשמה הצליחה! אנא התחבר.');
+         setCurrentView('login'); // Switch to login view
+     } catch (err) { setError(err.message || 'ההרשמה נכשלה.'); }
+     finally { setLoading(false); }
+  };
+
+
+  const handleLogout = () => {
+    console.log("handleLogout called"); // Debug Log
+    setAuthToken(null); // Triggers useEffect to clear localStorage, user, and set view to 'login'
+  };
+
+  console.log(`App Rendering: AuthToken=${!!authToken}, User=${!!user}, currentView=${currentView}`); // Debug Log
+
+  // --- Render Logic ---
+  return (
+    <div className="min-h-screen bg-gray-100 p-4">
+       {/* Simple Header */}
+       <header className="bg-white shadow p-4 mb-4 rounded flex justify-between items-center">
+            <h1 className="text-xl font-bold text-primary-blue">פורטל מטפלים</h1>
+            {authToken && <button onClick={handleLogout} className="text-sm text-red-600 hover:underline">התנתק</button>}
+       </header>
+
+        {/* General Error Display */}
+        {error && !loading && (
+             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4 text-right" role="alert">
+                 <span className="block sm:inline">{error}</span>
+                 <span className="absolute top-0 bottom-0 left-0 px-4 py-3 cursor-pointer" onClick={() => setError('')}>
+                    <svg className="fill-current h-6 w-6 text-red-500" role="button" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><title>Close</title><path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z"/></svg>
+                 </span>
+             </div>
+        )}
+
+      {/* Main Content Area */}
+      <main>
+        {currentView === 'loading' && <div className="text-center p-10"><div className="spinner"></div></div>}
+        {currentView === 'login' && <LoginModal handleLogin={handleLogin} loading={loading} onRegisterClick={() => {setCurrentView('register'); setError('');}} />}
+        {currentView === 'register' && <RegisterModal handleRegister={handleRegister} loading={loading} onLoginClick={() => {setCurrentView('login'); setError('');}} />}
+        {currentView === 'dashboard' && user?.professionalId && authToken && (
+          <ProfileEditor
+            authToken={authToken}
+            API_URL={API_URL}
+            user={user}
+            onUpdateSuccess={() => { console.log("Profile updated successfully"); setMessage('הפרופיל עודכן בהצלחה!'); }} // Optional: Add a message state here if needed
+            onLogout={handleLogout}
+          />
+        )}
+         {/* Shows if dashboard is expected but user data isn't ready or invalid */}
+         {currentView === 'dashboard' && !user?.professionalId && !loading && (
+             <div className="text-center p-10 text-red-600">שגיאה בטעינת נתוני מטפל. נסה להתחבר מחדש.</div>
+         )}
       </main>
     </div>
   );
-
-  // Render Logic
-  console.log(`App Rendering: AuthToken=${!!authToken}, User=${!!user}, currentView=${currentView}`);
-
-  if (authToken && user) {
-    return <DashboardView />;
-  } else if (currentView === 'register') {
-    return (
-      <RegisterModal
-        handleRegister={handleRegister}
-        loading={loading}
-        error={error}
-        onLoginClick={switchToLogin}
-      />
-    );
-  } else {
-    return (
-      <LoginModal
-        handleLogin={handleLogin}
-        loading={loading}
-        error={error}
-        onRegisterClick={switchToRegister}
-      />
-    );
-  }
-};
+}
 
 export default App;

@@ -1,9 +1,11 @@
+// src/utils/cropImage.js
+
 /**
- * יוצר תמונה חתוכה (Blob) מתוך תמונת מקור ונתוני חיתוך.
- * @param {string} imageSrc - ה-URL של תמונת המקור (dataURL או URL רגיל).
- * @param {object} pixelCrop - אובייקט עם נתוני הפיקסלים לחיתוך (x, y, width, height).
- * @param {number} rotation - סיבוב (כרגע לא בשימוש, אבל נדרש לחתימה).
- * @returns {Promise<Blob>} - הבטחה שמחזירה את התמונה החתוכה כ-Blob.
+ * Creates a cropped image Blob from a source image and crop data.
+ * @param {string} imageSrc - The source image URL (dataURL or regular URL).
+ * @param {object} pixelCrop - The pixel crop data { x, y, width, height }.
+ * @param {number} [rotation=0] - Rotation degrees (currently unused but part of standard cropper signature).
+ * @returns {Promise<Blob>} A Promise that resolves with the cropped image Blob.
  */
 export const getCroppedImg = (imageSrc, pixelCrop, rotation = 0) => {
   const createImage = (url) =>
@@ -11,11 +13,15 @@ export const getCroppedImg = (imageSrc, pixelCrop, rotation = 0) => {
       const image = new Image();
       image.addEventListener('load', () => resolve(image));
       image.addEventListener('error', (error) => reject(error));
-      image.setAttribute('crossOrigin', 'anonymous'); // נדרש לטעינת תמונות מ-URL חיצוני
+      image.setAttribute('crossOrigin', 'anonymous'); // Needed for loading external URLs or dataURLs sometimes
       image.src = url;
     });
 
   return new Promise(async (resolve, reject) => {
+    if (!pixelCrop) {
+      return reject(new Error('pixelCrop parameter is required.'));
+    }
+
     try {
       const image = await createImage(imageSrc);
       const canvas = document.createElement('canvas');
@@ -25,33 +31,41 @@ export const getCroppedImg = (imageSrc, pixelCrop, rotation = 0) => {
         return reject(new Error('Failed to get 2d context'));
       }
 
-      // הגדרות גודל הקנבס למידות החיתוך
+      // TODO: Handle rotation if needed in the future
+      // const R = rotation * (Math.PI / 180); // Convert degrees to radians
+
+      // Set canvas size to match the cropped area size
       canvas.width = pixelCrop.width;
       canvas.height = pixelCrop.height;
 
-      // ציור התמונה החתוכה על הקנבס
+      // Draw the cropped image onto the canvas
+      // The arguments define: source image, source x, source y, source width, source height,
+      // destination x, destination y, destination width, destination height
       ctx.drawImage(
         image,
-        pixelCrop.x, // נקודת התחלה x בחיתוך
-        pixelCrop.y, // נקודת התחלה y בחיתוך
-        pixelCrop.width, // רוחב החיתוך
-        pixelCrop.height, // גובה החיתוך
-        0, // ציור בפינה 0 של הקנבס
-        0, // ציור בפינה 0 של הקנבס
-        pixelCrop.width, // מתיחה לרוחב הקנבס
-        pixelCrop.height // מתיחה לגובה הקנבס
+        pixelCrop.x,
+        pixelCrop.y,
+        pixelCrop.width,
+        pixelCrop.height,
+        0, // Draw at top-left corner of canvas
+        0,
+        pixelCrop.width, // Scale to canvas width
+        pixelCrop.height // Scale to canvas height
       );
 
-      // המרת הקנבס ל-Blob
+      // Convert canvas to Blob
       canvas.toBlob((blob) => {
         if (!blob) {
-          console.error('Canvas is empty');
-          return reject(new Error('Canvas is empty'));
+          console.error('Canvas is empty or browser blob creation failed');
+          return reject(new Error('Failed to create blob from canvas'));
         }
-        // blob.name = 'profile.jpg'; // נוכל להוסיף שם אם נרצה
+        // Optionally add a filename to the blob
+        // blob.name = 'cropped_profile.jpeg';
         resolve(blob);
-      }, 'image/jpeg', 0.95); // איכות 95%
+      }, 'image/jpeg', 0.90); // Use JPEG format with 90% quality
+
     } catch (e) {
+      console.error('Error in getCroppedImg:', e);
       reject(e);
     }
   });
