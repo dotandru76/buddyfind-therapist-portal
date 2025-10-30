@@ -104,9 +104,11 @@ function App() {
     setError('');
     try {
       const res = await fetch(`${API_URL}/api/login`, {
-        // *** THE FIX IS HERE: method: 'POST' ***
+        
+        // *** !!! התיקון הקריטי כאן !!! ***
         method: 'POST',
-        // ***************************************
+        // **********************************
+
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
       });
@@ -170,7 +172,7 @@ function App() {
     <div className="min-h-screen bg-gray-100 p-4">
        {/* Simple Header */}
        <header className="bg-white shadow p-4 mb-4 rounded flex justify-between items-center">
-            <h1 className="text-xl font-bold text-primary-blue">פורטל מטפלים</h1>
+            <h1 className="text-xl font-bold text-primary-blue">WellMatch - פורטל מטפלים</h1>
             {authToken && <button onClick={handleLogout} className="text-sm text-red-600 hover:underline">התנתק</button>}
        </header>
 
