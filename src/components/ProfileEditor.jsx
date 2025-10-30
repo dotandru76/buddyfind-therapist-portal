@@ -288,7 +288,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                         <div> <label htmlFor="bio" className="block text-sm font-medium text-gray-700 mb-1">קצת עלי / גישה טיפולית</label> <textarea id="bio" name="bio" value={formData.bio || ''} onChange={handleChange} rows="4" placeholder="..." className="block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-blue/50 focus:border-primary-blue resize-none"/> </div>
                         {/* Specialties (No change) */}
                         <div>
-                           <label className="block text-sm font-medium text-gray-700 mb-2">התמחויות</label>
+                           <label className="block text-sm font-medium text-gray-700 mb-2">התמחויות (שפת מטפל)</label>
                            {formData.profession_id ? (
                                <div className="flex flex-wrap gap-2">
                                    {filteredSpecialties.length > 0 ? filteredSpecialties.map(spec => (
