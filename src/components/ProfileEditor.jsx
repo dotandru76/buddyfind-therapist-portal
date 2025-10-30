@@ -1,4 +1,4 @@
-// src/components/ProfileEditor.jsx (Final Synced Version - With handleChange Race Condition Fix)
+// src/components/ProfileEditor.jsx (Final Synced Version - With handleChange AND 'Online' Location Fix)
 import React, { useState, useEffect, useRef } from 'react';
 import ImageCropper from './ImageCropper';
 import { getCroppedImg } from '../utils/cropImage';
@@ -146,7 +146,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
 
     // --- Handlers ---
     
-    // --- !!! התיקון כאן: אוחדה הלוגיקה למניעת Race Condition !!! ---
+    // --- !!! תיקון 1: אוחדה הלוגיקה למניעת Race Condition !!! ---
     const handleChange = (e) => {
          const { name, value, type } = e.target;
          
@@ -168,7 +168,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
          
          setMessage(null); setError(null);
     };
-    // --- !!! סוף התיקון !!! ---
+    // --- !!! סוף תיקון 1 !!! ---
 
     const handleSpecialtyToggle = (specialtyId) => {
         setFormData(prev => ({ ...prev, specialties: prev.specialties.includes(specialtyId) ? prev.specialties.filter(id => id !== specialtyId) : [...prev.specialties, specialtyId] }));
@@ -225,7 +225,6 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
     const handleProfileSubmit = async (e) => {
         e.preventDefault(); setSavingProfile(true); setError(null); setMessage(null);
         
-        // !!! הדפסת בדיקה לפני שליחה !!!
         console.log("Data being sent to server:", formData);
         
         try {
@@ -234,18 +233,22 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
             payload.years_of_practice = parseInt(payload.years_of_practice, 10) || 0;
             payload.specialties = payload.specialties || []; 
             
+            // --- !!! תיקון 2: הוספת לוגיקה עבור 'online' !!! ---
             payload.locations = (payload.locations || [])
                 .map(loc => ({ city: loc.city?.trim(), region: loc.region })) 
-                .filter(loc => loc.city && loc.region); // <-- מסנן מיקומים ללא אזור
+                .filter(loc => 
+                    loc.region && // Must have a region
+                    (loc.city || loc.region === 'online') // Must have a city OR the region is 'online'
+                );
+            // --- !!! סוף תיקון 2 !!! ---
 
-            // !!! הדפסת בדיקה נוספת לאובייקט הנקי (payload) !!!
             console.log("CLEAN Payload being sent:", payload);
 
             const res = await fetch(`${API_URL}/api/professionals/me`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` }, body: JSON.stringify(payload) });
             if (res.status === 401 || res.status === 403) { onLogout(); return; }
             const data = await res.json(); if (!res.ok) { throw new Error(data.error || 'Update failed'); }
             setMessage('✅ פרטי הפרופיל עודכנו!'); 
-            // if (onUpdateSuccess) onUpdateSuccess(); // (Kept commented as per original)
+            
         } catch (err) { console.error('Profile Update error:', err); setError(err.message || 'שגיאה בעדכון הפרופיל.'); }
         finally { setSavingProfile(false); }
     };
@@ -324,12 +327,13 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                                 {(formData.locations || []).map((loc, index) => (
                                     <div key={index} className="grid grid-cols-3 items-center gap-2 p-2 border border-gray-200 rounded-md bg-gray-50/70">
                                          {/* City (col-span-2) */}
-                                         <input type="text" placeholder="עיר" value={loc.city || ''} onChange={(e) => handleLocationChange(index, 'city', e.target.value)} className="col-span-2 px-3 py-1.5 border border-gray-300 rounded-md text-sm shadow-sm"/>
+                                         <input type="text" placeholder="עיר (אופציונלי לאונליין)" value={loc.city || ''} onChange={(e) => handleLocationChange(index, 'city', e.target.value)} className="col-span-2 px-3 py-1.5 border border-gray-300 rounded-md text-sm shadow-sm"/>
                                          
                                          {/* Region Dropdown (col-span-1) */}
                                          <select 
                                             value={loc.region || ''} 
                                             onChange={(e) => handleLocationChange(index, 'region', e.target.value)} 
+                                            required // Make region mandatory
                                             className="col-span-1 px-2 py-1.5 border border-gray-300 rounded-md text-sm shadow-sm bg-white"
                                           >
                                             <option value="" disabled>-- בחר אזור --</option>
