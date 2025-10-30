@@ -236,7 +236,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
             
             payload.locations = (payload.locations || [])
                 .map(loc => ({ city: loc.city?.trim(), region: loc.region })) 
-                .filter(loc => loc.city && loc.region); 
+                .filter(loc => loc.city && loc.region); // <-- מסנן מיקומים ללא אזור
 
             // !!! הדפסת בדיקה נוספת לאובייקט הנקי (payload) !!!
             console.log("CLEAN Payload being sent:", payload);
@@ -382,7 +382,6 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                                                 title={`${day}, ${slot} - ${isSelected ? 'פנוי/ה (בטל)' : 'לא פנוי/ה (הוסף)'}`}>
                                             </td>
                                         );
-
                                     })}
                                 </tr>
                             ))}
