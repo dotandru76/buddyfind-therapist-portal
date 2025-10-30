@@ -1,10 +1,7 @@
-// src/components/ProfileEditor.jsx (Final Synced Version)
+// src/components/ProfileEditor.jsx (Final Synced Version - With onUpdateSuccess fix)
 import React, { useState, useEffect, useRef } from 'react';
 import ImageCropper from './ImageCropper';
 import { getCroppedImg } from '../utils/cropImage';
-
-// --- MOCK DATA (REMOVED) ---
-// Mocks are no longer needed as we fetch everything
 
 // --- Helper Components ---
 const AlertMessage = ({ type, message, onDismiss }) => {
@@ -32,14 +29,13 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
         specialties: [], locations: [], availability: {}
     });
     
-    // --- **NEW**: State for dynamic definitions ---
+    // --- State for dynamic definitions ---
     const [professions, setProfessions] = useState([]);
     const [allSpecialties, setAllSpecialties] = useState([]);
     const [filteredSpecialties, setFilteredSpecialties] = useState([]);
     const [defRegions, setDefRegions] = useState([]); // For regions dropdown
     const [defDays, setDefDays] = useState([]);       // For availability table
     const [defSlots, setDefSlots] = useState([]);     // For availability table
-    // --- End New State ---
 
     const [loading, setLoading] = useState(true);
     const [savingProfile, setSavingProfile] = useState(false);
@@ -51,7 +47,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
     const [imageToCrop, setImageToCrop] = useState(null);
     const [isCropping, setIsCropping] = useState(false);
 
-    // --- Fetch initial data (With Enhanced Error Logging) ---
+    // --- Fetch initial data ---
     useEffect(() => {
         let isMounted = true;
         const fetchInitialData = async () => {
@@ -66,7 +62,6 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
 
             try {
                 const fetchOptions = { headers: { 'Authorization': `Bearer ${authToken}` } };
-                // **MODIFIED**: Fetching options and profile in parallel
                 const [profileRes, optionsRes] = await Promise.all([
                     fetch(`${API_URL}/api/professionals/me`, fetchOptions),
                     fetch(`${API_URL}/api/data/options`, fetchOptions) 
@@ -94,12 +89,11 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                 console.log("ProfileEditor: Fetched data successfully.");
 
                 if (isMounted) {
-                    // **MODIFIED**: Set all definitions from API
                     setProfessions(optionsData.professions || []);
                     setAllSpecialties(optionsData.specialties || []);
-                    setDefRegions(optionsData.regions || []); // e.g., [{region_key: 'center', ...}]
-                    setDefDays(optionsData.days || []);       // e.g., ['ראשון', 'שני', ...]
-                    setDefSlots(optionsData.slots || []);     // e.g., ['בוקר (8-12)', ...]
+                    setDefRegions(optionsData.regions || []); 
+                    setDefDays(optionsData.days || []);       
+                    setDefSlots(optionsData.slots || []);     
 
                     let availability = {};
                     try {
@@ -139,7 +133,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
     }, [authToken, API_URL, user?.professionalId, onLogout]);
 
 
-    // --- Filter specialties (No change) ---
+    // --- Filter specialties ---
     useEffect(() => {
          if (formData.profession_id && allSpecialties?.length > 0) {
              const professionIdNum = parseInt(formData.profession_id, 10);
@@ -150,7 +144,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
      }, [formData.profession_id, allSpecialties]);
 
 
-    // --- Handlers (No change) ---
+    // --- Handlers ---
     const handleChange = (e) => {
          const { name, value, type } = e.target;
          setFormData(prev => ({ ...prev, [name]: type === 'number' ? parseInt(value, 10) || 0 : value }));
@@ -161,11 +155,10 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
         setFormData(prev => ({ ...prev, specialties: prev.specialties.includes(specialtyId) ? prev.specialties.filter(id => id !== specialtyId) : [...prev.specialties, specialtyId] }));
         setMessage(null); setError(null);
     };
-    // **MODIFIED**: Location handler now handles 'region_key' from dropdown
     const handleLocationChange = (index, field, value) => {
         const updatedLocations = [...formData.locations];
         if (field === 'city') updatedLocations[index].city = value;
-        if (field === 'region') updatedLocations[index].region = value; // value is now 'center', 'north' etc.
+        if (field === 'region') updatedLocations[index].region = value; 
         setFormData(prev => ({ ...prev, locations: updatedLocations }));
         setMessage(null); setError(null);
     };
@@ -183,7 +176,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
          setMessage(null); setError(null);
     };
 
-    // --- Image Cropper Logic (No change) ---
+    // --- Image Cropper Logic ---
     const handleImageClick = () => { if (fileInputRef.current) fileInputRef.current.value = null; fileInputRef.current?.click(); };
     const onFileChange = (e) => {
         const file = e.target.files?.[0]; if (!file) return;
@@ -218,21 +211,19 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
             payload.years_of_practice = parseInt(payload.years_of_practice, 10) || 0;
             payload.specialties = payload.specialties || []; 
             
-            // **MODIFIED**: Ensure locations have valid region_key
             payload.locations = (payload.locations || [])
-                .map(loc => ({ city: loc.city?.trim(), region: loc.region })) // region is now the key
-                .filter(loc => loc.city && loc.region); // Must have both city and region
+                .map(loc => ({ city: loc.city?.trim(), region: loc.region })) 
+                .filter(loc => loc.city && loc.region); 
 
             const res = await fetch(`${API_URL}/api/professionals/me`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` }, body: JSON.stringify(payload) });
             if (res.status === 401 || res.status === 403) { onLogout(); return; }
             const data = await res.json(); if (!res.ok) { throw new Error(data.error || 'Update failed'); }
-            setMessage('✅ פרטי הפרופיל עודכנו!'); if (onUpdateSuccess) onUpdateSuccess();
+            setMessage('✅ פרטי הפרופיל עודכנו!'); 
+            // if (onUpdateSuccess) onUpdateSuccess(); // <-- **THE FIX IS HERE**
         } catch (err) { console.error('Profile Update error:', err); setError(err.message || 'שגיאה בעדכון הפרופיל.'); }
         finally { setSavingProfile(false); }
     };
     
-    // **MODIFIED**: This handler is now much simpler, it just sends the state.
-    // The backend does the validation against the DB.
     const handleAvailabilitySubmit = async () => {
         setSavingAvailability(true); setError(null); setMessage(null);
         try {
@@ -258,7 +249,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
             <form onSubmit={handleProfileSubmit} className="bg-white p-6 md:p-8 rounded-lg shadow w-full mx-auto text-right">
                 <h3 className="text-xl font-bold text-text-dark mb-6 border-b pb-3">פרטי פרופיל ומידע מקצועי</h3>
                 <div className="flex flex-col-reverse md:flex-row gap-8 md:gap-12">
-                    {/* Image Column (No change) */}
+                    {/* Image Column */}
                     <div className="w-full md:w-56 flex flex-col items-center space-y-5 flex-shrink-0">
                          <div className="relative cursor-pointer group" onClick={handleImageClick} title="לחץ/י להחלפת תמונה">
                               <div className="w-32 h-32 md:w-36 md:h-36 rounded-full overflow-hidden border-4 border-primary-blue/60 shadow-lg bg-gray-100 flex items-center justify-center">
@@ -277,16 +268,16 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
 
                     {/* Details Column */}
                     <div className="flex-1 space-y-6">
-                        {/* Full Name (No change) */}
+                        {/* Full Name */}
                         <div> <label htmlFor="full_name" className="block text-sm font-medium text-gray-700 mb-1">שם מלא</label> <input type="text" id="full_name" name="full_name" value={formData.full_name} onChange={handleChange} required className="block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-blue/50 focus:border-primary-blue"/> </div>
-                        {/* Profession & Years (No change) */}
+                        {/* Profession & Years */}
                         <div className="grid grid-cols-2 gap-4">
                              <div> <label htmlFor="profession_id" className="block text-sm font-medium text-gray-700 mb-1">מקצוע</label> <select id="profession_id" name="profession_id" value={formData.profession_id} onChange={handleChange} required className="block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-blue/50 focus:border-primary-blue bg-white appearance-none pr-8 bg-no-repeat bg-right" style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, backgroundPosition: 'left 0.5rem center', backgroundSize: '1.5em 1.5em' }}> <option value="" disabled>-- בחר מקצוע --</option> {(professions || []).map(p => ( <option key={p.id} value={p.id}>{p.name}</option> ))} </select> </div>
                              <div> <label htmlFor="years_of_practice" className="block text-sm font-medium text-gray-700 mb-1">שנות נסיון</label> <input type="number" id="years_of_practice" name="years_of_practice" value={formData.years_of_practice} onChange={handleChange} min="0" max="60" className="block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-blue/50 focus:border-primary-blue"/> </div>
                         </div>
-                        {/* Bio (No change) */}
+                        {/* Bio */}
                         <div> <label htmlFor="bio" className="block text-sm font-medium text-gray-700 mb-1">קצת עלי / גישה טיפולית</label> <textarea id="bio" name="bio" value={formData.bio || ''} onChange={handleChange} rows="4" placeholder="..." className="block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-blue/50 focus:border-primary-blue resize-none"/> </div>
-                        {/* Specialties (No change) */}
+                        {/* Specialties */}
                         <div>
                            <label className="block text-sm font-medium text-gray-700 mb-2">התמחויות (שפת מטפל)</label>
                            {formData.profession_id ? (
@@ -300,7 +291,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                            ) : ( <p className="text-xs text-gray-500">נא לבחור מקצוע להצגת התמחויות.</p> )}
                         </div>
                         
-                        {/* --- LOCATIONS (MODIFIED) --- */}
+                        {/* --- LOCATIONS --- */}
                         <div>
                              <label className="block text-sm font-medium text-gray-700 mb-2">מיקומי קליניקה</label>
                             <div className="space-y-3">
@@ -309,7 +300,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                                          {/* City (col-span-2) */}
                                          <input type="text" placeholder="עיר" value={loc.city || ''} onChange={(e) => handleLocationChange(index, 'city', e.target.value)} className="col-span-2 px-3 py-1.5 border border-gray-300 rounded-md text-sm shadow-sm"/>
                                          
-                                         {/* **MODIFIED**: Region Dropdown (col-span-1) */}
+                                         {/* Region Dropdown (col-span-1) */}
                                          <select 
                                             value={loc.region || ''} 
                                             onChange={(e) => handleLocationChange(index, 'region', e.target.value)} 
@@ -330,7 +321,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                         </div>
                         {/* --- END LOCATIONS --- */}
 
-                        {/* Save Button (No change) */}
+                        {/* Save Button */}
                         <div className="pt-6 border-t border-gray-200 flex justify-start">
                              <button type="submit" disabled={savingProfile || savingImage || savingAvailability} className="inline-flex items-center justify-center py-2.5 px-6 border border-transparent rounded-lg shadow-sm text-base font-semibold text-white transition duration-200 ease-in-out bg-primary-blue hover:bg-secondary-purple focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-blue disabled:opacity-60 disabled:cursor-not-allowed">
                                 {savingProfile ? <ButtonSpinner /> : 'שמור שינויי פרופיל'}
@@ -340,7 +331,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                 </div>
             </form>
 
-            {/* --- AVAILABILITY SECTION (MODIFIED) --- */}
+            {/* --- AVAILABILITY SECTION --- */}
             <div className="bg-white p-6 md:p-8 rounded-lg shadow w-full mx-auto text-right">
                 <h3 className="text-xl font-bold text-text-dark mb-4">ניהול זמינות שבועית</h3>
                 <p className="text-sm text-gray-500 mb-6">סמן/י את משבצות הזמן הפנויות עבורך.</p>
@@ -349,16 +340,13 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                          <thead className="bg-gray-50">
                             <tr>
                                 <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200">יום</th>
-                                {/* **MODIFIED**: Render slots dynamically */}
                                 {defSlots.map(slot => ( <th key={slot} className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200">{slot}</th> ))}
                             </tr>
                         </thead>
                         <tbody className="bg-white">
-                            {/* **MODIFIED**: Render days dynamically */}
                             {defDays.map(day => (
                                 <tr key={day} className="divide-x divide-gray-200">
                                     <td className="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900 border border-gray-200">{day}</td>
-                                    {/* **MODIFIED**: Render slots dynamically */}
                                     {defSlots.map(slot => {
                                         const isSelected = formData.availability && formData.availability[day]?.includes(slot);
                                         return (
