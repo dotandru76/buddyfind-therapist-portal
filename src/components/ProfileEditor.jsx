@@ -1,4 +1,4 @@
-// src/components/ProfileEditor.jsx (Final Synced Version - With onUpdateSuccess fix)
+// src/components/ProfileEditor.jsx (Final Synced Version - With handleChange Race Condition Fix)
 import React, { useState, useEffect, useRef } from 'react';
 import ImageCropper from './ImageCropper';
 import { getCroppedImg } from '../utils/cropImage';
@@ -145,12 +145,31 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
 
 
     // --- Handlers ---
+    
+    // --- !!! התיקון כאן: אוחדה הלוגיקה למניעת Race Condition !!! ---
     const handleChange = (e) => {
          const { name, value, type } = e.target;
-         setFormData(prev => ({ ...prev, [name]: type === 'number' ? parseInt(value, 10) || 0 : value }));
-         if (name === 'profession_id') { setFormData(prev => ({ ...prev, specialties: [] })); }
+         
+         setFormData(prev => {
+            // 1. קבע את הערך החדש
+            const newValue = type === 'number' ? parseInt(value, 10) || 0 : value;
+            
+            // 2. צור עותק של ה-state הקודם ועדכן את הערך החדש
+            const newState = { ...prev, [name]: newValue };
+            
+            // 3. אם הערך ששונה הוא "מקצוע", אפס את ההתמחויות באותה פעולה
+            if (name === 'profession_id') {
+                newState.specialties = []; // אפס התמחויות על שינוי מקצוע
+            }
+            
+            // 4. החזר את האובייקט המעודכן כולו
+            return newState;
+         });
+         
          setMessage(null); setError(null);
     };
+    // --- !!! סוף התיקון !!! ---
+
     const handleSpecialtyToggle = (specialtyId) => {
         setFormData(prev => ({ ...prev, specialties: prev.specialties.includes(specialtyId) ? prev.specialties.filter(id => id !== specialtyId) : [...prev.specialties, specialtyId] }));
         setMessage(null); setError(null);
@@ -205,6 +224,10 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
     // --- Submit Handlers ---
     const handleProfileSubmit = async (e) => {
         e.preventDefault(); setSavingProfile(true); setError(null); setMessage(null);
+        
+        // !!! הדפסת בדיקה לפני שליחה !!!
+        console.log("Data being sent to server:", formData);
+        
         try {
             const { profile_image_url, email, availability, ...payload } = formData;
             payload.profession_id = parseInt(payload.profession_id, 10) || null;
@@ -215,11 +238,14 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                 .map(loc => ({ city: loc.city?.trim(), region: loc.region })) 
                 .filter(loc => loc.city && loc.region); 
 
+            // !!! הדפסת בדיקה נוספת לאובייקט הנקי (payload) !!!
+            console.log("CLEAN Payload being sent:", payload);
+
             const res = await fetch(`${API_URL}/api/professionals/me`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` }, body: JSON.stringify(payload) });
             if (res.status === 401 || res.status === 403) { onLogout(); return; }
             const data = await res.json(); if (!res.ok) { throw new Error(data.error || 'Update failed'); }
             setMessage('✅ פרטי הפרופיל עודכנו!'); 
-            // if (onUpdateSuccess) onUpdateSuccess(); // <-- **התיקון כאן, מנענו את הקריסה**
+            // if (onUpdateSuccess) onUpdateSuccess(); // (Kept commented as per original)
         } catch (err) { console.error('Profile Update error:', err); setError(err.message || 'שגיאה בעדכון הפרופיל.'); }
         finally { setSavingProfile(false); }
     };
@@ -356,6 +382,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                                                 title={`${day}, ${slot} - ${isSelected ? 'פנוי/ה (בטל)' : 'לא פנוי/ה (הוסף)'}`}>
                                             </td>
                                         );
+
                                     })}
                                 </tr>
                             ))}
