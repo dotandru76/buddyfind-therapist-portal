@@ -153,7 +153,7 @@ function App() {
          });
          const data = await res.json();
          if (!res.ok) { throw new Error(data.error || `Registration failed: ${res.status}`); }
-         alert('ההרשמה הצליחה! אנא התחבר.');
+         // NOTE: Removed alert() as per instructions, assuming RegisterModal handles its own UI feedback
          setCurrentView('login'); // Switch to login view
      } catch (err) { setError(err.message || 'ההרשמה נכשלה.'); }
      finally { setLoading(false); }
@@ -196,7 +196,7 @@ function App() {
             authToken={authToken}
             API_URL={API_URL}
             user={user}
-            onUpdateSuccess={() => { console.log("Profile updated successfully"); setMessage('הפרופיל עודכן בהצלחה!'); }} // Optional: Add a message state here if needed
+            onUpdateSuccess={() => { console.log("Profile updated successfully"); setError(''); }} // Clear errors on success
             onLogout={handleLogout}
           />
         )}

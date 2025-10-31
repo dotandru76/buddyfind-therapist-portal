@@ -1,4 +1,4 @@
-// src/components/ProfileEditor.jsx (Final Synced Version - With handleChange AND 'Online' Location Fix)
+// src/components/ProfileEditor.jsx (V23.0 - Race Condition Fix + Online Location Fix)
 import React, { useState, useEffect, useRef } from 'react';
 import ImageCropper from './ImageCropper';
 import { getCroppedImg } from '../utils/cropImage';
@@ -146,29 +146,25 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
 
     // --- Handlers ---
     
-    // --- !!! תיקון 1: אוחדה הלוגיקה למניעת Race Condition !!! ---
+    // ✅ התיקון: איחוד עדכוני ה-State למניעת Race Condition
     const handleChange = (e) => {
          const { name, value, type } = e.target;
          
          setFormData(prev => {
-            // 1. קבע את הערך החדש
             const newValue = type === 'number' ? parseInt(value, 10) || 0 : value;
-            
-            // 2. צור עותק של ה-state הקודם ועדכן את הערך החדש
             const newState = { ...prev, [name]: newValue };
             
-            // 3. אם הערך ששונה הוא "מקצוע", אפס את ההתמחויות באותה פעולה
+            // איפוס התמחויות על שינוי מקצוע
             if (name === 'profession_id') {
-                newState.specialties = []; // אפס התמחויות על שינוי מקצוע
+                newState.specialties = [];
             }
             
-            // 4. החזר את האובייקט המעודכן כולו
             return newState;
          });
          
          setMessage(null); setError(null);
     };
-    // --- !!! סוף תיקון 1 !!! ---
+    // --- סוף התיקון ---
 
     const handleSpecialtyToggle = (specialtyId) => {
         setFormData(prev => ({ ...prev, specialties: prev.specialties.includes(specialtyId) ? prev.specialties.filter(id => id !== specialtyId) : [...prev.specialties, specialtyId] }));
@@ -233,23 +229,37 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
             payload.years_of_practice = parseInt(payload.years_of_practice, 10) || 0;
             payload.specialties = payload.specialties || []; 
             
-            // --- !!! תיקון 2: הוספת לוגיקה עבור 'online' !!! ---
+            // Filter locations (Online fix)
             payload.locations = (payload.locations || [])
                 .map(loc => ({ city: loc.city?.trim(), region: loc.region })) 
                 .filter(loc => 
                     loc.region && // Must have a region
                     (loc.city || loc.region === 'online') // Must have a city OR the region is 'online'
                 );
-            // --- !!! סוף תיקון 2 !!! ---
 
             console.log("CLEAN Payload being sent:", payload);
 
             const res = await fetch(`${API_URL}/api/professionals/me`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` }, body: JSON.stringify(payload) });
+            
             if (res.status === 401 || res.status === 403) { onLogout(); return; }
-            const data = await res.json(); if (!res.ok) { throw new Error(data.error || 'Update failed'); }
+            
+            const data = await res.json(); 
+            
+            // Check for explicit specialty validation error from the server
+            if (res.status === 400 && data.error && data.error.includes('התמחויות')) {
+                 throw new Error(data.error);
+            }
+
+            if (!res.ok) { 
+                throw new Error(data.error || 'Update failed'); 
+            }
+            
             setMessage('✅ פרטי הפרופיל עודכנו!'); 
             
-        } catch (err) { console.error('Profile Update error:', err); setError(err.message || 'שגיאה בעדכון הפרופיל.'); }
+        } catch (err) { 
+            console.error('Profile Update error:', err); 
+            setError(err.message || 'שגיאה בעדכון הפרופיל.'); 
+        }
         finally { setSavingProfile(false); }
     };
     
