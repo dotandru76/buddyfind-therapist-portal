@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ImageCropper from './ImageCropper';
 import { getCroppedImg } from '../utils/cropImage';
-import AgeRangeSelector from './AgeRangeSelector.jsx'; 
+import AgeRangeSelector from './AgeRangeSelector.jsx'; // <-- הייבוא של הרכיב החדש
 
 // --- Helper Components ---
 const AlertMessage = ({ type, message, onDismiss }) => {
@@ -27,8 +27,8 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
     const [formData, setFormData] = useState({
         full_name: '', email: '', phone_number: '', bio: '', profession_id: '',
         years_of_practice: 0, profile_image_url: '/default-profile.png',
-        specialties: [], locations: [], availability: {}
-        age_ranges: []
+        specialties: [], locations: [], availability: {}, // <--- !!! התיקון כאן: הוספנו פסיק !!!
+        age_ranges: [] // <-- השורה החדשה
     });
     
     // --- State for dynamic definitions ---
@@ -117,7 +117,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                         specialties: profileData.specialty_ids || [], 
                         locations: profileData.locations || [], 
                         availability: availability || {}, 
-                        age_ranges: profileData.age_ranges || [],
+                        age_ranges: profileData.age_ranges || [] // <-- טעינת הנתונים החדשים
                     });
                     console.log("ProfileEditor: Set states successfully.");
                 }
@@ -239,7 +239,9 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                     loc.region && // Must have a region
                     (loc.city || loc.region === 'online') // Must have a city OR the region is 'online'
                 );
-            payload.age_ranges = formData.age_ranges || [];
+            
+            payload.age_ranges = formData.age_ranges || []; // <-- שליחת הנתונים החדשים
+
             console.log("CLEAN Payload being sent:", payload);
 
             const res = await fetch(`${API_URL}/api/professionals/me`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` }, body: JSON.stringify(payload) });
@@ -332,7 +334,8 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                                </div>
                            ) : ( <p className="text-xs text-gray-500">נא לבחור מקצוע להצגת התמחויות.</p> )}
                         </div>
-                        {/* --- !!! הוספה חדשה: טווחי גילאים !!! --- */}
+                        
+                        {/* --- Age Ranges --- */}
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">טווחי גילאים לטיפול</label>
                           <AgeRangeSelector
@@ -344,7 +347,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                             }}
                           />
                         </div>
-                        {/* --- סוף הוספה --- */}
+
                         {/* --- LOCATIONS --- */}
                         <div>
                              <label className="block text-sm font-medium text-gray-700 mb-2">מיקומי קליניקה</label>
