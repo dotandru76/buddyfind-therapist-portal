@@ -501,8 +501,7 @@ body {
     animation: spin 1s linear infinite;
 }
 
-/* --- !!! הדבק את הבלוק הזה בסוף style.css (במקום הישן) !!! --- */
-
+/* --- !!! הוספנו את הבלוק הזה עבור הסליידר החדש !!! --- */
 /* --- START Age Range Selector Styles (for Radix UI) --- */
 
 .age-range-selector {
