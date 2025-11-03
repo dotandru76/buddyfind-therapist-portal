@@ -1,8 +1,9 @@
-// src/App.jsx (FOR ADMIN PORTAL ONLY - Final Version with POST fix)
+// src/App.jsx (FOR ADMIN PORTAL ONLY - משודרג עם רכיב ביקורות)
 import React, { useState, useEffect } from 'react';
 import LoginModal from './components/LoginModal'; // Ensure LoginModal.jsx exists in ./components
 import ProfileEditor from './components/ProfileEditor'; // Ensure ProfileEditor.jsx exists in ./components
 import RegisterModal from './components/RegisterModal'; // Ensure RegisterModal.jsx exists in ./components
+import PendingReviews from './components/PendingReviews'; // <-- [חדש] ייבוא הרכיב לניהול ביקורות
 
 // Use environment variable for API URL if available, otherwise default
 const API_URL = import.meta.env.VITE_API_URL || 'https://buddyfind-api.onrender.com';
@@ -188,18 +189,32 @@ function App() {
 
       {/* Main Content Area */}
       <main>
-        {currentView === 'loading' && <div className="text-center p-10"><div className="spinner"></div></div>}
+        {currentView === 'loading' && <div className="text-center p-10"><div className="spinner w-10 h-10"></div></div>}
         {currentView === 'login' && <LoginModal handleLogin={handleLogin} loading={loading} onRegisterClick={() => {setCurrentView('register'); setError('');}} />}
         {currentView === 'register' && <RegisterModal handleRegister={handleRegister} loading={loading} onLoginClick={() => {setCurrentView('login'); setError('');}} />}
+        
+        {/* --- [חדש] עטיפה לשני רכיבי ה-Dashboard --- */}
         {currentView === 'dashboard' && user?.professionalId && authToken && (
-          <ProfileEditor
-            authToken={authToken}
-            API_URL={API_URL}
-            user={user}
-            onUpdateSuccess={() => { console.log("Profile updated successfully"); setError(''); }} // Clear errors on success
-            onLogout={handleLogout}
-          />
+          <div className="space-y-8">
+            {/* הרכיב החדש לניהול ביקורות */}
+            <PendingReviews
+              authToken={authToken}
+              API_URL={API_URL}
+              onLogout={handleLogout} // מעביר לו את פונקציית ההתנתקות
+            />
+          
+            {/* עורך הפרופיל הקיים */}
+            <ProfileEditor
+              authToken={authToken}
+              API_URL={API_URL}
+              user={user}
+              onUpdateSuccess={() => { console.log("Profile updated successfully"); setError(''); }} // Clear errors on success
+              onLogout={handleLogout}
+            />
+          </div>
         )}
+         {/* --- סוף העדכון --- */}
+         
          {/* Shows if dashboard is expected but user data isn't ready or invalid */}
          {currentView === 'dashboard' && !user?.professionalId && !loading && (
              <div className="text-center p-10 text-red-600">שגיאה בטעינת נתוני מטפל. נסה להתחבר מחדש.</div>
