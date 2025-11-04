@@ -1,146 +1,119 @@
-// src/App.jsx (FOR ADMIN PORTAL ONLY - משודרג עם רכיב ביקורות)
-import React, { useState, useEffect } from 'react';
-import LoginModal from './components/LoginModal'; // Ensure LoginModal.jsx exists in ./components
-import ProfileEditor from './components/ProfileEditor'; // Ensure ProfileEditor.jsx exists in ./components
-import RegisterModal from './components/RegisterModal'; // Ensure RegisterModal.jsx exists in ./components
-import PendingReviews from './components/PendingReviews'; // <-- [חדש] ייבוא הרכיב לניהול ביקורות
+// src/App.jsx (של Admin Portal) - V23.8 FIX
+import React, { useState, useEffect, useCallback } from 'react';
+import LoginModal from './components/LoginModal'; 
+import ProfileEditor from './components/ProfileEditor';
+import RegisterModal from './components/RegisterModal'; 
+import PendingReviews from './components/PendingReviews'; 
 
-// Use environment variable for API URL if available, otherwise default
-const API_URL = import.meta.env.VITE_API_URL || 'https://buddyfind-api.onrender.com';
+const API_URL = 'https://buddyfind-api.onrender.com';
 
 function App() {
-  const [authToken, setAuthToken] = useState(null); // Initialize as null
-  const [user, setUser] = useState(null); // Will store { userId, professionalId, userType }
-  const [loading, setLoading] = useState(false); // General loading state
-  const [error, setError] = useState(''); // General error display
-  const [currentView, setCurrentView] = useState('loading'); // Start in loading state: 'loading', 'login', 'register', 'dashboard'
+  const [authToken, setAuthToken] = useState(null); 
+  const [user, setUser] = useState(null); 
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(''); 
+  const [currentView, setCurrentView] = useState('loading'); 
 
-  // Effect to handle initial token check and decoding on component mount
+  // --- Token Decoder ---
+  // ... (הקוד של ה-useEffect להבאת נתונים מהטוקן נשאר זהה) ...
   useEffect(() => {
-    console.log("App Mount Effect: Checking for initial token..."); // Debug Log
+    console.log("App Mount Effect: Checking for initial token...");
     const token = localStorage.getItem('therapist_token');
     if (token) {
-      console.log("App Mount Effect: Found initial token."); // Debug Log
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
-        // Basic check for expiration
-        if (payload.exp * 1000 > Date.now()) {
-          // Check if it's a valid professional token
-          if (payload.userType === 'professional' && payload.professionalId) {
-            console.log("App Mount Effect: Token valid and is professional. Setting state."); // Debug Log
-            setUser({ userId: payload.userId, professionalId: payload.professionalId, userType: payload.userType });
-            setAuthToken(token); // Set the token state
-            setCurrentView('dashboard'); // Set view to dashboard
-          } else {
-            console.warn("App Mount Effect: Token valid but not for a professional user or missing ID."); // Debug Log
-            handleLogout(); // Force logout
-            setError('חשבון לא מוגדר כמטפל.');
-            setCurrentView('login'); // Ensure view is login
-          }
+        const isAuthorized = payload.userType === 'admin' || (payload.userType === 'professional' && payload.professionalId);
+
+        if (payload.exp * 1000 > Date.now() && isAuthorized) {
+          console.log("App Mount Effect: Token valid and authorized."); 
+          setUser({ userId: payload.userId, professionalId: payload.professionalId, userType: payload.userType });
+          setAuthToken(token); 
+          setCurrentView('dashboard');
         } else {
-          console.warn("App Mount Effect: Token expired."); // Debug Log
-          handleLogout(); // Token expired
-          setError('פג תוקף ההתחברות, אנא התחבר מחדש.');
-          setCurrentView('login'); // Ensure view is login
+          console.warn("App Mount Effect: Token expired or unauthorized.");
+          handleLogout(); 
+          setError(isAuthorized ? 'פג תוקף ההתחברות, אנא התחבר מחדש.' : 'אינך מורשה לגשת לפורטל זה.');
+          setCurrentView('login');
         }
       } catch (e) {
-        console.error("App Mount Effect: Error decoding initial token:", e); // Debug Log
-        handleLogout(); // Invalid token format
+        console.error("App Mount Effect: Error decoding initial token:", e); 
+        handleLogout(); 
         setError('אסימון לא תקין, אנא התחבר מחדש.');
-        setCurrentView('login'); // Ensure view is login
+        setCurrentView('login');
       }
     } else {
-      console.log("App Mount Effect: No initial token found."); // Debug Log
-      setCurrentView('login'); // No token, go to login
+      setCurrentView('login'); 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run only once on mount
+  }, []);
 
-  // Effect to update localStorage and user state when authToken changes state
-   useEffect(() => {
-       console.log("AuthToken Effect: AuthToken changed:", !!authToken); // Debug Log
+  useEffect(() => {
+       console.log("AuthToken Effect: AuthToken changed:", !!authToken); 
        if (authToken) {
            localStorage.setItem('therapist_token', authToken);
            try {
                const payload = JSON.parse(atob(authToken.split('.')[1]));
-               // Ensure userType is professional AND professionalId exists
-               if(payload.userType === 'professional' && payload.professionalId){
-                   console.log("AuthToken Effect: Setting user state:", payload); // Debug Log
+               
+               // [*** התיקון ב-useEffect: בדיקת הרשאה נכונה ***]
+               const isProfessional = payload.userType === 'professional' && payload.professionalId;
+               const isAdmin = payload.userType === 'admin';
+               const isAuthorized = isAdmin || isProfessional;
+               
+               if(isAuthorized){
+                   console.log("AuthToken Effect: Setting user state:", payload); 
                    setUser({ userId: payload.userId, professionalId: payload.professionalId, userType: payload.userType });
-                   // Only switch view if not already on dashboard (prevents flicker on initial load)
-                   if(currentView !== 'dashboard') {
-                       console.log("AuthToken Effect: Switching view to dashboard."); // Debug Log
-                       setCurrentView('dashboard');
-                   }
+                   if(currentView !== 'dashboard') { setCurrentView('dashboard'); }
                } else {
-                   // Logged in successfully but server didn't return expected data for admin
-                   console.error("AuthToken Effect: Logged in user is not a valid professional for admin portal."); // Debug Log
+                   console.error("AuthToken Effect: Logged in user is unauthorized or missing Professional ID.");
                    handleLogout();
-                   setError('שגיאה: חשבון אינו מוגדר כמטפל.');
+                   setError('שגיאה: חשבון אינו מוגדר כמטפל או מנהל.');
                }
            } catch (e) {
-               console.error("AuthToken Effect: Error decoding token after state update:", e); // Debug Log
+               console.error("AuthToken Effect: Error decoding token after state update:", e); 
                handleLogout();
                setError('שגיאה בעיבוד נתוני התחברות.');
            }
        } else {
-           console.log("AuthToken Effect: Clearing token and user state."); // Debug Log
            localStorage.removeItem('therapist_token');
            setUser(null);
-           // Only switch view if not already on login/register
-           if(currentView !== 'login' && currentView !== 'register') {
-               console.log("AuthToken Effect: Switching view to login."); // Debug Log
-               setCurrentView('login');
-           }
+           if(currentView !== 'login' && currentView !== 'register') { setCurrentView('login'); }
        }
-   // Only depend on authToken, view change is handled internally
    // eslint-disable-next-line react-hooks/exhaustive-deps
    }, [authToken]);
 
 
-  // --- Authentication Handlers ---
   const handleLogin = async (credentials) => {
-    console.log("handleLogin started", credentials); // Debug Log
     setLoading(true);
     setError('');
     try {
       const res = await fetch(`${API_URL}/api/login`, {
-        
-        // *** !!! התיקון הקריטי כאן !!! ***
         method: 'POST',
-        // **********************************
-
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
       });
-      console.log("handleLogin: Fetch response status:", res.status); // Debug Log
       const data = await res.json();
-      console.log("handleLogin: Fetch response data:", data); // Debug Log
 
       if (!res.ok) {
-         // Check specific server errors first
-         if (res.status === 403 && data.error?.includes('הפרופיל המקצועי חסר')) {
-             throw new Error(data.error);
-         }
-         // Use the error message from the JSON body if available, otherwise use statusText
-         throw new Error(data.error || res.statusText || `Login failed: ${res.status}`);
+         throw new Error(data.error || `Login failed: ${res.status}`);
+      }
+      
+      // [*** התיקון העיקרי ב-handleLogin ***]
+      // אם המשתמש הוא admin OR professional, זה בסדר.
+      const isProfessional = data.userType === 'professional' && data.professionalId;
+      const isAdmin = data.userType === 'admin';
+      
+      if (!isProfessional && !isAdmin) {
+          console.error("Login successful but is a pure client trying to access admin portal:", data);
+          throw new Error("התחברת בהצלחה, אך חשבונך אינו מוגדר כמטפל או מנהל.");
       }
 
-       // Crucial check for Admin Portal: Ensure professionalId exists
-       if (data.professionalId === null || data.professionalId === undefined) {
-           console.error("Login successful but professionalId is missing for admin portal:", data);
-           throw new Error("התחברת בהצלחה אך חשבונך אינו מוגדר כמטפל.");
-       }
-
-      console.log("handleLogin: Login successful, setting auth token."); // Debug Log
-      setAuthToken(data.token); // This triggers the useEffect to update user and view
+      setAuthToken(data.token);
 
     } catch (err) {
-      console.error('handleLogin: Error during login fetch:', err); // Debug Log
+      console.error('handleLogin: Error during login fetch:', err); 
       setError(err.message || 'התחברות נכשלה.');
-      setLoading(false); // Ensure loading stops on error, as useEffect won't run
+      setLoading(false); 
     }
-    // setLoading(false) is implicitly handled by setAuthToken triggering useEffect on success
   };
 
   const handleRegister = async (details) => {
@@ -154,30 +127,24 @@ function App() {
          });
          const data = await res.json();
          if (!res.ok) { throw new Error(data.error || `Registration failed: ${res.status}`); }
-         // NOTE: Removed alert() as per instructions, assuming RegisterModal handles its own UI feedback
-         setCurrentView('login'); // Switch to login view
+         setCurrentView('login'); 
      } catch (err) { setError(err.message || 'ההרשמה נכשלה.'); }
      finally { setLoading(false); }
   };
 
 
   const handleLogout = () => {
-    console.log("handleLogout called"); // Debug Log
-    setAuthToken(null); // Triggers useEffect to clear localStorage, user, and set view to 'login'
+    setAuthToken(null); 
   };
-
-  console.log(`App Rendering: AuthToken=${!!authToken}, User=${!!user}, currentView=${currentView}`); // Debug Log
 
   // --- Render Logic ---
   return (
     <div className="min-h-screen bg-gray-100 p-4">
-       {/* Simple Header */}
        <header className="bg-white shadow p-4 mb-4 rounded flex justify-between items-center">
             <h1 className="text-xl font-bold text-primary-blue">WellMatch - פורטל מטפלים</h1>
             {authToken && <button onClick={handleLogout} className="text-sm text-red-600 hover:underline">התנתק</button>}
        </header>
 
-        {/* General Error Display */}
         {error && !loading && (
              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4 text-right" role="alert">
                  <span className="block sm:inline">{error}</span>
@@ -187,36 +154,41 @@ function App() {
              </div>
         )}
 
-      {/* Main Content Area */}
       <main>
         {currentView === 'loading' && <div className="text-center p-10"><div className="spinner w-10 h-10"></div></div>}
         {currentView === 'login' && <LoginModal handleLogin={handleLogin} loading={loading} onRegisterClick={() => {setCurrentView('register'); setError('');}} />}
         {currentView === 'register' && <RegisterModal handleRegister={handleRegister} loading={loading} onLoginClick={() => {setCurrentView('login'); setError('');}} />}
         
-        {/* --- [חדש] עטיפה לשני רכיבי ה-Dashboard --- */}
-        {currentView === 'dashboard' && user?.professionalId && authToken && (
+        {/* --- הצגת Dashboard למנהל (ADMIN) --- */}
+        {currentView === 'dashboard' && user?.userType === 'admin' && (
+             <AdminDashboard
+                authToken={authToken}
+                API_URL={API_URL}
+                user={user}
+                onLogout={handleLogout}
+             />
+        )}
+        
+        {/* --- הצגת Dashboard למטפל (PROFESSIONAL) --- */}
+        {currentView === 'dashboard' && user?.userType === 'professional' && authToken && (
           <div className="space-y-8">
-            {/* הרכיב החדש לניהול ביקורות */}
             <PendingReviews
               authToken={authToken}
               API_URL={API_URL}
-              onLogout={handleLogout} // מעביר לו את פונקציית ההתנתקות
+              user={user}
+              onLogout={handleLogout}
             />
-          
-            {/* עורך הפרופיל הקיים */}
             <ProfileEditor
               authToken={authToken}
               API_URL={API_URL}
               user={user}
-              onUpdateSuccess={() => { console.log("Profile updated successfully"); setError(''); }} // Clear errors on success
+              onUpdateSuccess={() => { console.log("Profile updated successfully"); setError(''); }}
               onLogout={handleLogout}
             />
           </div>
         )}
-         {/* --- סוף העדכון --- */}
          
-         {/* Shows if dashboard is expected but user data isn't ready or invalid */}
-         {currentView === 'dashboard' && !user?.professionalId && !loading && (
+         {currentView === 'dashboard' && !user?.userType && !loading && (
              <div className="text-center p-10 text-red-600">שגיאה בטעינת נתוני מטפל. נסה להתחבר מחדש.</div>
          )}
       </main>
