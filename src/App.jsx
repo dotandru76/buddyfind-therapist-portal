@@ -4,7 +4,7 @@ import LoginModal from './components/LoginModal';
 import ProfileEditor from './components/ProfileEditor';
 import RegisterModal from './components/RegisterModal'; 
 import PendingReviews from './components/PendingReviews'; 
-
+import AdminDashboard from './components/AdminDashboard';
 const API_URL = 'https://buddyfind-api.onrender.com';
 
 function App() {
