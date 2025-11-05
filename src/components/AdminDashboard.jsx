@@ -1,9 +1,10 @@
 // src/components/AdminDashboard.jsx
-// --- גרסה V6.0 (עם 4 כרטיסיות + גרף) ---
+// --- גרסה V7.0 (עם ניתוב פנימי למנהל שאלונים) ---
 
 import React, { useState, useEffect, useCallback } from 'react';
-import ActionModal from './ActionModal'; // זהו הקובץ היחיד שנייבא
-import RegistrationsGraph from './RegistrationsGraph'; // <-- ייבוא הגרף החדש
+import ActionModal from './ActionModal'; 
+import RegistrationsGraph from './RegistrationsGraph'; 
+import QuestionnaireManager from './QuestionnaireManager'; // <-- ייבוא הרכיב החדש
 
 // =================================================================
 // --- רכיבי עזר פנימיים (כדי למנוע יצירת קבצים קטנים) ---
@@ -42,7 +43,8 @@ const ActionCard = ({ title, value, color, onClick }) => {
         yellow: 'from-yellow-50 to-yellow-100 border-yellow-300 text-yellow-800 hover:shadow-yellow-200',
         green: 'from-green-50 to-green-100 border-green-300 text-green-800 hover:shadow-green-200',
         blue: 'from-blue-50 to-blue-100 border-blue-300 text-blue-800 hover:shadow-blue-200',
-        red: 'from-red-50 to-red-100 border-red-300 text-red-800 hover:shadow-red-200', // <-- צבע חדש לערעורים
+        red: 'from-red-50 to-red-100 border-red-300 text-red-800 hover:shadow-red-200',
+        purple: 'from-purple-50 to-purple-100 border-purple-300 text-purple-800 hover:shadow-purple-200', // <-- צבע חדש
     };
 
     return (
@@ -65,11 +67,12 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
         totalUsers: 0, 
         totalProfessionals: 0, 
         totalPendingReviews: 0,
-        totalDisputedReviews: 0 // <-- סטטוס חדש
+        totalDisputedReviews: 0 
     });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [currentModal, setCurrentModal] = useState(null); // 'reviews', 'professionals', 'users', 'disputed'
+    const [adminView, setAdminView] = useState('main'); // <-- סטייט ניתוב פנימי
 
     // --- קריאת API סטטיסטית ראשונית ---
     const fetchAdminStats = useCallback(async () => {
@@ -84,7 +87,7 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
                  throw new Error('שגיאה בטעינת נתונים סטטיסטיים.');
             }
             const data = await statsRes.json();
-            setStats(data); // <-- ה-API המעודכן מחזיר עכשיו את כל 4 הערכים
+            setStats(data);
         } catch (err) {
             setError(err.message);
         } finally {
@@ -109,39 +112,57 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
             
             {error && <AlertMessage type="error" message={error} onDismiss={() => setError(null)} />}
 
-            {/* 1. רכיבי הפעולה החדשים - 4 כרטיסיות */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <ActionCard
-                    title="חוות דעת ממתינות"
-                    value={stats.totalPendingReviews}
-                    color="yellow"
-                    onClick={() => setCurrentModal('reviews')}
+            {/* --- הצגה מותנית: דשבורד ראשי או מנהל שאלונים --- */}
+            {adminView === 'main' ? (
+                <>
+                    {/* 1. רכיבי הפעולה - 5 כרטיסיות */}
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+                        <ActionCard
+                            title="חוות דעת ממתינות"
+                            value={stats.totalPendingReviews}
+                            color="yellow"
+                            onClick={() => setCurrentModal('reviews')}
+                        />
+                        <ActionCard
+                            title="ערעורים לטיפול"
+                            value={stats.totalDisputedReviews}
+                            color="red"
+                            onClick={() => setCurrentModal('disputed')}
+                        />
+                        <ActionCard
+                            title="מטפלים פעילים"
+                            value={stats.totalProfessionals}
+                            color="green"
+                            onClick={() => setCurrentModal('professionals')}
+                        />
+                        <ActionCard
+                            title="משתמשים רשומים"
+                            value={stats.totalUsers}
+                            color="blue"
+                            onClick={() => setCurrentModal('users')}
+                        />
+                        <ActionCard
+                            title="ניהול שאלונים"
+                            value="+"
+                            color="purple"
+                            onClick={() => setAdminView('questionnaires')}
+                        />
+                    </div>
+                    
+                    {/* 2. אזור הגרפים */}
+                    <div className="p-6 bg-white rounded-lg shadow">
+                        <h3 className="text-xl font-bold text-text-dark mb-4 border-b pb-2">נרשמים חדשים (30 יום אחרונים)</h3>
+                        <RegistrationsGraph authToken={authToken} API_URL={API_URL} />
+                    </div>
+                </>
+            ) : (
+                // --- הצגת מנהל השאלונים ---
+                <QuestionnaireManager 
+                    authToken={authToken} 
+                    API_URL={API_URL} 
+                    onBack={() => setAdminView('main')} 
                 />
-                <ActionCard
-                    title="ערעורים לטיפול"
-                    value={stats.totalDisputedReviews}
-                    color="red"
-                    onClick={() => setCurrentModal('disputed')}
-                />
-                <ActionCard
-                    title="מטפלים פעילים"
-                    value={stats.totalProfessionals}
-                    color="green"
-                    onClick={() => setCurrentModal('professionals')}
-                />
-                <ActionCard
-                    title="משתמשים רשומים"
-                    value={stats.totalUsers}
-                    color="blue"
-                    onClick={() => setCurrentModal('users')}
-                />
-            </div>
-            
-            {/* 2. אזור הגרפים */}
-            <div className="p-6 bg-white rounded-lg shadow">
-                <h3 className="text-xl font-bold text-text-dark mb-4 border-b pb-2">נרשמים חדשים (30 יום אחרונים)</h3>
-                <RegistrationsGraph authToken={authToken} API_URL={API_URL} />
-            </div>
+            )}
             
             {/* 3. המודאל החכם שמופעל לפי לחיצה */}
             {currentModal && (
