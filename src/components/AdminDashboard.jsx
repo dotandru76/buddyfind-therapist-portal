@@ -1,9 +1,10 @@
 // src/components/AdminDashboard.jsx
-// --- גרסה V6.1 (תיקון באג snake_case) ---
+// --- גרסה V7.1 (תיקון שגיאת ייבוא) ---
 
 import React, { useState, useEffect, useCallback } from 'react';
 import ActionModal from './ActionModal'; 
 import RegistrationsGraph from './RegistrationsGraph'; 
+import QuestionnaireManager from './QuestionnaireManager'; // <-- !!! התיקון: וידוא ששורה זו קיימת !!!
 
 // =================================================================
 // --- רכיבי עזר פנימיים (כדי למנוע יצירת קבצים קטנים) ---
@@ -40,7 +41,7 @@ const ActionCard = ({ title, value, color, onClick }) => {
         green: 'from-green-50 to-green-100 border-green-300 text-green-800 hover:shadow-green-200',
         blue: 'from-blue-50 to-blue-100 border-blue-300 text-blue-800 hover:shadow-blue-200',
         red: 'from-red-50 to-red-100 border-red-300 text-red-800 hover:shadow-red-200',
-        purple: 'from-purple-50 to-purple-100 border-purple-300 text-purple-800 hover:shadow-purple-200', 
+        purple: 'from-purple-50 to-purple-100 border-purple-300 text-purple-800 hover:shadow-purple-200', // <-- צבע חדש
     };
 
     return (
@@ -68,7 +69,7 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [currentModal, setCurrentModal] = useState(null); // 'reviews', 'professionals', 'users', 'disputed'
-    const [adminView, setAdminView] = useState('main'); 
+    const [adminView, setAdminView] = useState('main'); // <-- סטייט ניתוב פנימי
 
     // --- !!! התיקון הקריטי כאן (בדיקת snake_case) !!! ---
     if (user?.user_type !== 'admin') {
@@ -87,7 +88,7 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
                  throw new Error('שגיאה בטעינת נתונים סטטיסטיים.');
             }
             const data = await statsRes.json();
-            setStats(data);
+            setStats(data); // <-- ה-API המעודכן מחזיר עכשיו את כל 4 הערכים
         } catch (err) {
             setError(err.message);
         } finally {
