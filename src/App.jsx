@@ -1,5 +1,5 @@
 // src/App.jsx (של buddyfind-therapist-portal)
-// --- גרסה V3.2 (תיקון באג הצגת פרופיל למנהל) ---
+// --- גרסה V3.3 (תיקון באג snake_case / camelCase) ---
 
 import React, { useState, useEffect } from 'react';
 import LoginModal from './components/LoginModal';
@@ -35,7 +35,7 @@ const App = () => {
             }
             const data = await res.json();
             setUser(data);
-            // --- !!! התיקון כאן: קובע תצוגה ראשית נכונה !!! ---
+            // קביעת תצוגה ראשית נכונה
             if (data.user_type === 'admin') {
                 setNav('admin'); // מנהל תמיד יתחיל בדשבורד
             } else {
@@ -78,7 +78,8 @@ const App = () => {
                 alert('הרשמה בוצעה בהצלחה! אנא התחבר.');
                 setView('login');
             } else {
-                if (data.userType !== 'professional' && data.userType !== 'admin') {
+                // --- !!! התיקון הקריטי כאן (בדיקת snake_case) !!! ---
+                if (data.user_type !== 'professional' && data.user_type !== 'admin') {
                     throw new Error('גישה מורשית למטפלים ומנהלים בלבד.');
                 }
                 localStorage.setItem('portal_token', data.token);
@@ -103,9 +104,8 @@ const App = () => {
     const renderNav = () => {
         if (!user) return null;
         const isAdmin = user.user_type === 'admin';
-        // --- !!! התיקון כאן: בודק user.id (מזהה מטפל) ---
-        // `user.id` יהיה null אם המשתמש הוא מנהל בלבד
-        const hasProfile = user.id !== null; 
+        // --- !!! התיקון הקריטי כאן (בדיקת פרופיל) !!! ---
+        const hasProfile = user.user_type === 'professional' || (user.user_type === 'admin' && user.id !== null);
 
         return (
             <nav className="flex justify-center gap-6 mb-8 border-b border-gray-200">
@@ -118,7 +118,6 @@ const App = () => {
                     </button>
                 )}
                 
-                {/* --- !!! התיקון כאן: הצג טאבים אלו רק אם למשתמש יש פרופיל מטפל --- */}
                 {hasProfile && (
                     <>
                         <button 
@@ -168,7 +167,7 @@ const App = () => {
                 {renderNav()}
                 {error && <div className="p-4 mb-4 text-red-700 bg-red-100 border border-red-400 rounded text-right">{error}</div>}
                 
-                {/* --- !!! התיקון כאן: הצג רק אם יש ID מטפל וזה הטאב הנכון --- */}
+                {/* הבדיקה (user.id) כאן נכונה - היא בודקת אם קיים פרופיל מטפל */}
                 {user.id && nav === 'profile' && (
                     <ProfileEditor 
                         authToken={authToken} 
