@@ -1,12 +1,11 @@
 // src/App.jsx (של buddyfind-therapist-portal)
-// --- גרסה V3.0 (משתמשת במנהל חוות הדעת החדש) ---
+// --- גרסה V3.1 (תיקון באג הצגת פרופיל למנהל) ---
 
 import React, { useState, useEffect } from 'react';
 import LoginModal from './components/LoginModal';
 import RegisterModal from './components/RegisterModal';
 import ProfileEditor from './components/ProfileEditor';
-// import PendingReviews from './components/PendingReviews'; // <-- מוחלף
-import TherapistReviewManager from './components/TherapistReviewManager'; // <-- הרכיב החדש
+import TherapistReviewManager from './components/TherapistReviewManager'; 
 import AdminDashboard from './components/AdminDashboard';
 
 const API_URL = 'https://buddyfind-api.onrender.com';
@@ -31,11 +30,17 @@ const App = () => {
                 if (res.status === 401 || res.status === 403) {
                     throw new Error('פג תוקף, יש להתחבר מחדש.');
                 }
-                throw new Error('שגיאה בטעינת פרופיל');
+                const data = await res.json(); // נסה לקרוא את גוף השגיאה
+                throw new Error(data.error || 'שגיאה בטעינת פרופיל');
             }
             const data = await res.json();
             setUser(data);
-            setNav(data.user_type === 'admin' ? 'admin' : 'profile'); // קבע תצוגה ראשית
+            // --- !!! התיקון כאן: קובע תצוגה ראשית נכונה !!! ---
+            if (data.user_type === 'admin') {
+                setNav('admin'); // מנהל תמיד יתחיל בדשבורד
+            } else {
+                setNav('profile'); // מטפל תמיד יתחיל בפרופיל
+            }
         } catch (err) {
             console.error(err);
             setError(err.message);
@@ -108,18 +113,24 @@ const App = () => {
                         לוח בקרה (Admin)
                     </button>
                 )}
-                <button 
-                    onClick={() => setNav('profile')}
-                    className={`py-4 px-2 text-sm font-semibold ${nav === 'profile' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                    עריכת פרופיל
-                </button>
-                <button 
-                    onClick={() => setNav('reviews')}
-                    className={`py-4 px-2 text-sm font-semibold ${nav === 'reviews' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                    ניהול חוות דעת
-                </button>
+                
+                {/* --- !!! התיקון כאן: הצג טאבים אלו רק אם אתה לא מנהל, או אם אתה מנהל *ויש* לך פרופיל מטפל --- */}
+                {(user.user_type === 'professional' || (isAdmin && user.professionalId)) && (
+                    <>
+                        <button 
+                            onClick={() => setNav('profile')}
+                            className={`py-4 px-2 text-sm font-semibold ${nav === 'profile' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            עריכת פרופיל
+                        </button>
+                        <button 
+                            onClick={() => setNav('reviews')}
+                            className={`py-4 px-2 text-sm font-semibold ${nav === 'reviews' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            ניהול חוות דעת
+                        </button>
+                    </>
+                )}
             </nav>
         );
     };
@@ -153,34 +164,33 @@ const App = () => {
                 {renderNav()}
                 {error && <div className="p-4 mb-4 text-red-700 bg-red-100 border border-red-400 rounded text-right">{error}</div>}
                 
-                <div className={`${nav === 'profile' ? 'block' : 'hidden'}`}>
+                {/* --- !!! התיקון כאן: הצג רק אם יש ID מטפל --- */}
+                {user.professionalId && nav === 'profile' && (
                     <ProfileEditor 
                         authToken={authToken} 
                         API_URL={API_URL} 
                         user={user}
-                        onUpdateSuccess={() => fetchUserProfile(authToken)} // רענן פרופיל אחרי שמירה
+                        onUpdateSuccess={() => fetchUserProfile(authToken)}
                         onLogout={handleLogout}
                     />
-                </div>
+                )}
                 
-                <div className={`${nav === 'reviews' ? 'block' : 'hidden'}`}>
-                    {/* --- !!! כאן הוחלף הרכיב הישן בחדש !!! --- */}
+                {/* --- !!! התיקון כאן: הצג רק אם יש ID מטפל --- */}
+                {user.professionalId && nav === 'reviews' && (
                     <TherapistReviewManager 
                         authToken={authToken} 
                         API_URL={API_URL} 
                         onLogout={handleLogout}
                     />
-                </div>
+                )}
                 
-                {user.user_type === 'admin' && (
-                     <div className={`${nav === 'admin' ? 'block' : 'hidden'}`}>
-                        <AdminDashboard 
-                            authToken={authToken} 
-                            API_URL={API_URL} 
-                            user={user}
-                            onLogout={handleLogout}
-                        />
-                    </div>
+                {user.user_type === 'admin' && nav === 'admin' && (
+                     <AdminDashboard 
+                        authToken={authToken} 
+                        API_URL={API_URL} 
+                        user={user}
+                        onLogout={handleLogout}
+                    />
                 )}
             </div>
         );
