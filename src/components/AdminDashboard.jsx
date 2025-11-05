@@ -1,5 +1,5 @@
 // src/components/AdminDashboard.jsx
-// --- גרסה V7.2 (הוספת ניהול הגדרות) ---
+// --- גרסה V7.3 (תיקון באג הסתרת כפתורים והוספת Settings) ---
 
 import React, { useState, useEffect, useCallback } from 'react';
 import ActionModal from './ActionModal'; 
@@ -7,7 +7,7 @@ import RegistrationsGraph from './RegistrationsGraph';
 import QuestionnaireManager from './QuestionnaireManager'; 
 
 // =================================================================
-// --- רכיבי עזר פנימיים (כדי למנוע יצירת קבצים קטנים) ---
+// --- רכיבי עזר פנימיים (הועברו לכאן כדי להימנע מריבוי קבצים קטנים) ---
 // =================================================================
 
 const LoadingSpinner = () => (
@@ -19,7 +19,10 @@ const LoadingSpinner = () => (
 const AlertMessage = ({ type, message, onDismiss }) => {
     if (!message) return null;
     const baseClasses = "px-4 py-3 rounded relative mb-4 text-right";
-    const typeClasses = type === 'success' ? "bg-green-100 border-green-400 text-green-700" : "bg-red-100 border-red-400 text-red-700";
+    const typeClasses = type === 'success' 
+        ? "bg-green-100 border-green-400 text-green-700" 
+        : "bg-red-100 border-red-400 text-red-700";
+    
     return (
         <div className={`${baseClasses} ${typeClasses}`} role="alert">
             <span className="block sm:inline">{message}</span>
@@ -52,8 +55,8 @@ const ActionCard = ({ title, value, color, onClick }) => {
     );
 };
 
-// --- !!! רכיב חדש לניהול הגדרות !!! ---
-const SettingsManager = ({ authToken, API_URL }) => {
+// --- !!! רכיב ניהול הגדרות !!! ---
+const SettingsManager = ({ authToken, API_URL, onBack }) => {
     const [settings, setSettings] = useState({});
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -109,20 +112,26 @@ const SettingsManager = ({ authToken, API_URL }) => {
     
     return (
         <div className="bg-white p-6 md:p-8 rounded-lg shadow w-full mx-auto text-right">
-            <h3 className="text-xl font-bold text-text-dark mb-4 border-b pb-3">הגדרות אוטומציה</h3>
+             <div className="flex justify-between items-center mb-6 border-b pb-3">
+                <h3 className="text-2xl font-bold text-text-dark">⚙️ ניהול הגדרות אוטומציה</h3>
+                <button onClick={onBack} className="py-2 px-4 bg-gray-500 text-white rounded-lg text-sm font-semibold hover:bg-gray-600 transition">
+                    חזור לדשבורד
+                </button>
+            </div>
+            
             {message && <AlertMessage type="success" message={message} onDismiss={() => setMessage(null)} />}
             {error && <AlertMessage type="error" message={error} onDismiss={() => setError(null)} />}
 
             <div className="space-y-4">
                 {/* הגדרת ימי ההמתנה לשליחת שאלון */}
                 <div className="p-4 border border-gray-200 rounded-lg flex justify-between items-center">
-                    <div>
-                        <h4 className="font-semibold text-text-dark">ימי המתנה לשאלון (Treatment Delay)</h4>
+                    <div className="flex-1">
+                        <h4 className="font-semibold text-text-dark">ימי המתנה לשאלון (Questionnaire Delay)</h4>
                         <p className="text-sm text-gray-600">
-                            קביעת מספר הימים שיעברו מדיווח תחילת הטיפול ועד שליחת שאלון חוות דעת אוטומטית. (ברירת מחדל: 60 ימים).
+                            קביעת מספר הימים שיעברו מדיווח תחילת הטיפול ועד שליחת שאלון חוות דעת אוטומטית. 
                         </p>
                     </div>
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-2 flex-shrink-0">
                         <input
                             type="number"
                             min="1"
@@ -139,23 +148,6 @@ const SettingsManager = ({ authToken, API_URL }) => {
                         </button>
                     </div>
                 </div>
-                
-                {/* כפתור בדיקת CRON (שלב עזר) */}
-                <div className="p-4 border border-gray-200 rounded-lg bg-red-50 flex justify-between items-center">
-                    <div>
-                        <h4 className="font-semibold text-text-dark">בדיקת שליחה מיידית (Test CRON)</h4>
-                        <p className="text-sm text-red-600">
-                            מפעיל את מנגנון השליחה האוטומטי באופן מיידי (בודק רשומות שעברו את זמן ההמתנה שנקבע).
-                        </p>
-                    </div>
-                    <button
-                        onClick={() => handleSave('questionnaire_delay_days')} // (משתמשים בפונקציית שמירה כדוגמה)
-                        disabled={saving}
-                        className="py-1 px-3 bg-red-500 text-white rounded-md text-xs font-medium hover:bg-red-600 disabled:opacity-50"
-                    >
-                        הפעל בדיקה
-                    </button>
-                </div>
             </div>
         </div>
     );
@@ -167,10 +159,6 @@ const SettingsManager = ({ authToken, API_URL }) => {
 // =================================================================
 
 const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
-    // ... (כל הקוד של AdminDashboard נשאר זהה)
-    // ... (פונקציות העזר LoadingSpinner, AlertMessage, ActionCard)
-    // ... (הבדיקה user?.user_type !== 'admin')
-
     const [stats, setStats] = useState({ 
         totalUsers: 0, 
         totalProfessionals: 0, 
@@ -203,7 +191,7 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
         } finally {
             setLoading(false);
         }
-    }, [authToken, API_URL, onLogout]); 
+    }, [authToken, API_URL, onLogout]);
 
     useEffect(() => {
         fetchAdminStats();
@@ -221,22 +209,83 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
             
             {error && <AlertMessage type="error" message={error} onDismiss={() => setError(null)} />}
 
-            {/* --- הצגה מותנית: דשבורד ראשי או מנהל שאלונים --- */}
+            {/* --- הצגה מותנית: דשבורד ראשי או מנהל שאלונים/הגדרות --- */}
             {adminView === 'main' ? (
                 <>
                     {/* 1. רכיבי הפעולה - 5 כרטיסיות */}
                     <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-                        {/* ... (כרטיסיות חוות דעת, ערעורים, מטפלים, משתמשים) ... */}
-                        
                         <ActionCard
-                            title="ניהול הגדרות"
-                            value="⚙️"
+                            title="חוות דעת ממתינות"
+                            value={stats.totalPendingReviews}
+                            color="yellow"
+                            onClick={() => setCurrentModal('reviews')}
+                        />
+                        <ActionCard
+                            title="ערעורים לטיפול"
+                            value={stats.totalDisputedReviews}
+                            color="red"
+                            onClick={() => setCurrentModal('disputed')}
+                        />
+                        <ActionCard
+                            title="מטפלים פעילים"
+                            value={stats.totalProfessionals}
+                            color="green"
+                            onClick={() => setCurrentModal('professionals')}
+                        />
+                        <ActionCard
+                            title="משתמשים רשומים"
+                            value={stats.totalUsers}
+                            color="blue"
+                            onClick={() => setCurrentModal('users')}
+                        />
+                        <ActionCard
+                            title="ניהול שאלונים"
+                            value="+"
                             color="purple"
-                            onClick={() => setAdminView('settings')}
+                            onClick={() => setAdminView('questionnaires')}
                         />
                     </div>
                     
-                    {/* 2. אזור הגרפים */}
+                    {/* 2. כפתורי קישור למידע מפורט (הוספת ניהול הגדרות) */}
+                    <div className="p-6 bg-white rounded-lg shadow space-y-6">
+                        <h3 className="text-xl font-bold text-text-dark border-b pb-2">ניתוח נתונים ופעילות</h3>
+
+                        {/* כפתור 1: רשומות צפייה (Analytics) */}
+                        <AdminActionButton 
+                            title="פעילות צפייה (View Analytics)"
+                            subtitle="לקוחות שיצרו קשר עם מטפלים (כולל קוד אנונימי וזמן)"
+                            apiEndpoint={`${API_URL}/api/admin/activity/views`}
+                            authToken={authToken}
+                            tableHeaders={['זמן צפייה', 'קוד לקוח אנונימי', 'מטפל נצפה']}
+                            tableKeys={['viewed_at', 'client_anon_id', 'professional_name']}
+                        />
+
+                        {/* כפתור 2: רשימת מטפלים */}
+                        <AdminActionButton 
+                            title="רשימת מטפלים"
+                            subtitle={`סך ${stats.totalProfessionals} מטפלים רשומים (כולל מקצוע וסטטוס)`}
+                            apiEndpoint={`${API_URL}/api/admin/users/professionals`}
+                            authToken={authToken}
+                            tableHeaders={['שם מלא', 'מקצוע', 'אימייל', 'סטטוס', 'צפיות']}
+                            tableKeys={['full_name', 'profession', 'email', 'active_status', 'view_count']}
+                        />
+                        
+                        {/* כפתור 3: ניהול הגדרות דינמיות */}
+                        <div className="p-4 border border-gray-200 rounded-lg bg-gray-50 flex justify-between items-center">
+                            <div>
+                                <h4 className="font-semibold text-lg text-text-dark">ניהול הגדרות מערכת</h4>
+                                <p className="text-sm text-gray-500">עדכון ימי המתנה לשאלונים, ניהול קבועים גלובליים.</p>
+                            </div>
+                            <button
+                                onClick={() => setAdminView('settings')}
+                                className="py-2 px-4 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700 transition"
+                            >
+                                ערוך הגדרות
+                            </button>
+                        </div>
+                    </div>
+                    
+                    {/* 3. אזור הגרפים */}
                     <div className="p-6 bg-white rounded-lg shadow">
                         <h3 className="text-xl font-bold text-text-dark mb-4 border-b pb-2">נרשמים חדשים (30 יום אחרונים)</h3>
                         <RegistrationsGraph authToken={authToken} API_URL={API_URL} />
@@ -254,6 +303,7 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
                 <SettingsManager 
                     authToken={authToken} 
                     API_URL={API_URL} 
+                    onBack={() => setAdminView('main')}
                 />
             ) : null}
             
