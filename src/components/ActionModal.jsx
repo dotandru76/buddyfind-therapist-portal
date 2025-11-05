@@ -1,4 +1,6 @@
 // src/components/ActionModal.jsx
+// --- גרסה מתוקנת (עם נתיב API נכון) ---
+
 import React, { useState, useEffect, useMemo } from 'react';
 import moment from 'moment';
 import LoadingSpinner from './LoadingSpinner';
@@ -31,7 +33,9 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
             case 'reviews':
                 return {
                     title: 'ניהול חוות דעת ממתינות',
-                    endpoint: `${API_URL}/api/admin/reviews/pending`,
+                    // --- !!! התיקון בוצע כאן !!! ---
+                    endpoint: `${API_URL}/api/admin/reviews/pending-admin`, // תוקן מ-pending
+                    // -----------------------------
                     headers: ['תאריך', 'קוד לקוח', 'ביקורת', 'פעולות'],
                 };
             case 'professionals':
@@ -43,7 +47,7 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
             case 'users':
                 return {
                     title: 'רשימת משתמשים (כללי)',
-                    endpoint: `${API_URL}/api/admin/users/all`, // נצטרך להוסיף API זה
+                    endpoint: `${API_URL}/api/admin/users/all`,
                     headers: ['אימייל', 'סוג', 'קוד אנונימי', 'נרשם ב-'],
                 };
             default:
@@ -136,7 +140,7 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
                         </td>
                     </tr>
                 );
-            case 'users': // (Endpoint /api/admin/users/all עדיין לא קיים)
+            case 'users': 
                  return (
                     <tr key={item.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3">{item.email}</td>
