@@ -1,5 +1,5 @@
 // src/App.jsx (של buddyfind-therapist-portal)
-// --- גרסה V3.2 (תיקון בדיקת מזהה משתמש) ---
+// --- גרסה V3.2 (תיקון באג הצגת פרופיל למנהל) ---
 
 import React, { useState, useEffect } from 'react';
 import LoginModal from './components/LoginModal';
@@ -35,6 +35,7 @@ const App = () => {
             }
             const data = await res.json();
             setUser(data);
+            // --- !!! התיקון כאן: קובע תצוגה ראשית נכונה !!! ---
             if (data.user_type === 'admin') {
                 setNav('admin'); // מנהל תמיד יתחיל בדשבורד
             } else {
@@ -102,7 +103,8 @@ const App = () => {
     const renderNav = () => {
         if (!user) return null;
         const isAdmin = user.user_type === 'admin';
-        // --- !!! התיקון כאן: בודק user.id (מזהה מטפל) במקום professionalId ---
+        // --- !!! התיקון כאן: בודק user.id (מזהה מטפל) ---
+        // `user.id` יהיה null אם המשתמש הוא מנהל בלבד
         const hasProfile = user.id !== null; 
 
         return (
@@ -116,6 +118,7 @@ const App = () => {
                     </button>
                 )}
                 
+                {/* --- !!! התיקון כאן: הצג טאבים אלו רק אם למשתמש יש פרופיל מטפל --- */}
                 {hasProfile && (
                     <>
                         <button 
@@ -165,7 +168,7 @@ const App = () => {
                 {renderNav()}
                 {error && <div className="p-4 mb-4 text-red-700 bg-red-100 border border-red-400 rounded text-right">{error}</div>}
                 
-                {/* --- !!! התיקון כאן: בודק user.id (מזהה מטפל) וגם nav --- */}
+                {/* --- !!! התיקון כאן: הצג רק אם יש ID מטפל וזה הטאב הנכון --- */}
                 {user.id && nav === 'profile' && (
                     <ProfileEditor 
                         authToken={authToken} 
