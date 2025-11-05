@@ -1,15 +1,14 @@
 // src/components/AdminDashboard.jsx
-// --- גרסה V7.3 (תיקון באג הסתרת כפתורים והוספת Settings) ---
+// --- גרסה V7.4 (תיקון שגיאת ReferenceError והחזרת כל הרכיבים הנסתרים) ---
 
 import React, { useState, useEffect, useCallback } from 'react';
 import moment from 'moment'; // נדרש: npm install moment
-import ActionModal from './ActionModal'; 
-import RegistrationsGraph from './RegistrationsGraph'; 
-import QuestionnaireManager from './QuestionnaireManager'; 
-import SettingsManager from './SettingsManager'; // ייבוא ה-SettingsManager
+import ActionModal from './ActionModal'; // זה נשאר חיצוני
+import RegistrationsGraph from './RegistrationsGraph'; // זה נשאר חיצוני
+import QuestionnaireManager from './QuestionnaireManager'; // זה נשאר חיצוני
 
 // =================================================================
-// --- רכיבי עזר פנימיים (הועברו לכאן כדי להימנע מריבוי קבצים קטנים) ---
+// --- רכיבי עזר פנימיים (מניעת ReferenceError) ---
 // =================================================================
 
 const LoadingSpinner = () => (
@@ -57,6 +56,51 @@ const ActionCard = ({ title, value, color, onClick }) => {
         </button>
     );
 };
+
+// --- !!! הוספת רכיב AdminActionButton כדי לפתור את שגיאת ה-ReferenceError !!! ---
+const AdminActionButton = ({ title, subtitle, apiEndpoint, authToken, tableHeaders, tableKeys, onDataLoad }) => {
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const res = await fetch(apiEndpoint, {
+                headers: { 'Authorization': `Bearer ${authToken}` },
+            });
+            if (!res.ok) throw new Error(`שגיאה ${res.status}: קריאת נתונים נכשלה.`);
+            const result = await res.json();
+            
+            // Call the handler function passed by the parent (AdminDashboard) to open the modal
+            if (onDataLoad) {
+                onDataLoad({ title, data: result, headers: tableHeaders, keys: tableKeys, apiEndpoint });
+            }
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    }, [apiEndpoint, authToken, onDataLoad, tableHeaders, tableKeys, title]);
+
+    return (
+        <div className="p-4 border border-gray-200 rounded-lg bg-gray-50 flex justify-between items-center">
+            <div>
+                <h4 className="font-semibold text-lg text-text-dark">{title}</h4>
+                <p className="text-sm text-gray-500">{subtitle}</p>
+                {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+            </div>
+            <button
+                onClick={fetchData}
+                disabled={loading}
+                className="py-2 px-4 bg-primary-blue text-white rounded-lg text-sm font-semibold hover:bg-secondary-purple transition disabled:opacity-50"
+            >
+                {loading ? 'טוען...' : 'הצג פרטים'}
+            </button>
+        </div>
+    );
+};
+
 
 // --- רכיב ניהול הגדרות ---
 const SettingsManager = ({ authToken, API_URL, onBack }) => {
@@ -156,91 +200,6 @@ const SettingsManager = ({ authToken, API_URL, onBack }) => {
     );
 };
 
-// --- רכיב עזר: Admin Action Button (מציג נתונים במודאל) ---
-// (הוחזר לכאן כי הוא נמחק קודם)
-const AdminActionButton = ({ title, subtitle, apiEndpoint, authToken, tableHeaders, tableKeys }) => {
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [data, setData] = useState(null);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
-
-    const fetchData = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const res = await fetch(apiEndpoint, {
-                headers: { 'Authorization': `Bearer ${authToken}` },
-            });
-            if (!res.ok) throw new Error(`שגיאה ${res.status}: קריאת נתונים נכשלה.`);
-            const result = await res.json();
-            setData(result);
-            setIsModalOpen(true);
-        } catch (err) {
-            setError(err.message);
-        } finally {
-            setLoading(false);
-        }
-    }, [apiEndpoint, authToken]);
-
-    return (
-        <>
-            <div className="p-4 border border-gray-200 rounded-lg bg-gray-50 flex justify-between items-center">
-                <div>
-                    <h4 className="font-semibold text-lg text-text-dark">{title}</h4>
-                    <p className="text-sm text-gray-500">{subtitle}</p>
-                </div>
-                <button
-                    onClick={fetchData}
-                    disabled={loading}
-                    className="py-2 px-4 bg-primary-blue text-white rounded-lg text-sm font-semibold hover:bg-secondary-purple transition disabled:opacity-50"
-                >
-                    {loading ? 'טוען...' : 'הצג פרטים'}
-                </button>
-            </div>
-        </>
-    );
-};
-
-// --- רכיב המודאל המציג את הנתונים (טבלת נתונים) ---
-const DataModal = ({ title, data, headers, keys, onClose, error }) => {
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-white p-6 md:p-8 rounded-2xl w-full max-w-4xl relative shadow-xl text-right max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-                <h2 className="text-2xl font-bold text-text-dark mb-4 border-b pb-2">{title}</h2>
-                <button onClick={onClose} className="absolute top-4 left-4 text-gray-500 text-2xl leading-none transition hover:text-red-500">&times;</button>
-                
-                {error && <AlertMessage type="error" message={error} />}
-
-                <div className="mt-4">
-                    <table className="min-w-full divide-y divide-gray-200 text-sm">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                {headers.map((header, index) => (
-                                    <th key={index} className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        {header}
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {data?.map((item, index) => (
-                                <tr key={index} className="hover:bg-gray-50">
-                                    {keys.map((key, kIndex) => (
-                                        <td key={kIndex} className="px-4 py-3 whitespace-nowrap text-gray-800">
-                                            {/* (moment.js required for proper date formatting) */}
-                                            {moment(item[key]).isValid() ? moment(item[key]).format('DD/MM/YY HH:mm') : item[key]}
-                                        </td>
-                                    ))}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    );
-};
-
 
 // =================================================================
 // --- הרכיב הראשי: AdminDashboard ---
@@ -257,6 +216,7 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
     const [error, setError] = useState(null);
     const [currentModal, setCurrentModal] = useState(null); 
     const [adminView, setAdminView] = useState('main'); 
+    const [modalData, setModalData] = useState(null); // State for opening the generic modal
 
     if (user?.user_type !== 'admin') {
         return <div className="text-center p-10 text-red-600">גישה נדחתה. נדרשת הרשאת מנהל.</div>;
@@ -288,6 +248,12 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
     const handleActionComplete = () => {
         fetchAdminStats();
     };
+    
+    // Handler for opening the general data modal
+    const handleDataLoad = ({ title, data, headers, keys }) => {
+        setModalData({ title, data, headers, keys });
+        setCurrentModal('data');
+    };
 
     if (loading) { return <LoadingSpinner />; }
     
@@ -300,7 +266,7 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
             {/* --- הצגה מותנית: דשבורד ראשי או מנהל שאלונים/הגדרות --- */}
             {adminView === 'main' ? (
                 <>
-                    {/* 1. רכיבי הפעולה - 5 כרטיסיות */}
+                    {/* 1. רכיבי הפעולה - 5 כרטיסיות (ACTION CARDS) */}
                     <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
                         <ActionCard
                             title="חוות דעת ממתינות"
@@ -334,7 +300,7 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
                         />
                     </div>
                     
-                    {/* 2. כפתורי קישור למידע מפורט (הוספת ניהול הגדרות) */}
+                    {/* 2. כפתורי קישור למידע מפורט (ANALYTICS & SETTINGS) */}
                     <div className="p-6 bg-white rounded-lg shadow space-y-6">
                         <h3 className="text-xl font-bold text-text-dark border-b pb-2">ניתוח נתונים ופעילות</h3>
 
@@ -346,6 +312,7 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
                             authToken={authToken}
                             tableHeaders={['זמן צפייה', 'קוד לקוח אנונימי', 'מטפל נצפה']}
                             tableKeys={['viewed_at', 'client_anon_id', 'professional_name']}
+                            onDataLoad={handleDataLoad}
                         />
 
                         {/* כפתור 2: רשימת מטפלים */}
@@ -356,6 +323,7 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
                             authToken={authToken}
                             tableHeaders={['שם מלא', 'מקצוע', 'אימייל', 'סטטוס', 'צפיות']}
                             tableKeys={['full_name', 'profession', 'email', 'active_status', 'view_count']}
+                            onDataLoad={handleDataLoad}
                         />
                         
                         {/* כפתור 3: רשימת לקוחות */}
@@ -366,6 +334,7 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
                             authToken={authToken}
                             tableHeaders={['ID', 'אימייל', 'קוד אנונימי', 'תאריך הרשמה']}
                             tableKeys={['id', 'email', 'anonymous_id', 'created_at']}
+                            onDataLoad={handleDataLoad}
                         />
 
                         {/* כפתור 4: ניהול הגדרות דינמיות */}
@@ -390,14 +359,12 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
                     </div>
                 </>
             ) : adminView === 'questionnaires' ? (
-                // --- הצגת מנהל השאלונים ---
                 <QuestionnaireManager 
                     authToken={authToken} 
                     API_URL={API_URL} 
                     onBack={() => setAdminView('main')} 
                 />
             ) : adminView === 'settings' ? (
-                // --- !!! הוספת מנהל ההגדרות !!! ---
                 <SettingsManager 
                     authToken={authToken} 
                     API_URL={API_URL} 
@@ -413,6 +380,8 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
                     API_URL={API_URL}
                     onClose={() => setCurrentModal(null)}
                     onActionComplete={handleActionComplete}
+                    // Pass data for generic data modal
+                    modalData={currentModal === 'data' ? modalData : null}
                 />
             )}
         </div>
