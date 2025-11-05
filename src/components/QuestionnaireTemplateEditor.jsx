@@ -1,5 +1,5 @@
 // src/components/QuestionnaireTemplateEditor.jsx
-// --- רכיב חדש ליצירת תבנית ---
+// --- גרסה V2.0 (תמיכה בסוגי שאלות) ---
 
 import React, { useState } from 'react';
 
@@ -30,7 +30,19 @@ const AlertMessage = ({ type, message, onDismiss }) => {
 const QuestionnaireTemplateEditor = ({ authToken, API_URL, template, onBack, onSave }) => {
     const [name, setName] = useState(template?.name || '');
     const [description, setDescription] = useState(template?.description || '');
-    const [questions, setQuestions] = useState(template?.questions_json || []);
+    // --- !!! התיקון כאן: מנסה לפענח JSON אם הוא מגיע כטקסט ---
+    const [questions, setQuestions] = useState(() => {
+        if (!template?.questions_json) return [];
+        if (typeof template.questions_json === 'string') {
+            try {
+                return JSON.parse(template.questions_json);
+            } catch (e) {
+                return [];
+            }
+        }
+        return template.questions_json;
+    });
+    
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
 
@@ -38,8 +50,8 @@ const QuestionnaireTemplateEditor = ({ authToken, API_URL, template, onBack, onS
         const newQuestion = {
             id: `q_${Date.now()}`,
             text: '',
-            type: 'text', // סוגי ברירת מחדל: 'text', 'textarea', 'radio'
-            options: [] // עבור סוג 'radio'
+            type: 'text', // סוג ברירת מחדל
+            options: [] 
         };
         setQuestions([...questions, newQuestion]);
     };
@@ -158,13 +170,25 @@ const QuestionnaireTemplateEditor = ({ authToken, API_URL, template, onBack, onS
                                         הסר
                                     </button>
                                 </div>
-                                <input
-                                    type="text"
-                                    placeholder="נוסח השאלה"
-                                    value={q.text}
-                                    onChange={(e) => handleQuestionChange(q.id, 'text', e.target.value)}
-                                    className="block w-full px-3 py-2 border border-gray-300 rounded-md"
-                                />
+                                
+                                {/* --- !!! התיקון כאן: הוספת בחירת סוג שאלה --- */}
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder="נוסח השאלה"
+                                        value={q.text}
+                                        onChange={(e) => handleQuestionChange(q.id, 'text', e.target.value)}
+                                        className="block w-full px-3 py-2 border border-gray-300 rounded-md"
+                                    />
+                                    <select
+                                        value={q.type}
+                                        onChange={(e) => handleQuestionChange(q.id, 'type', e.target.value)}
+                                        className="block w-40 px-3 py-2 border border-gray-300 rounded-md bg-white"
+                                    >
+                                        <option value="text">טקסט פתוח</option>
+                                        <option value="rating">דירוג (1-5)</option>
+                                    </select>
+                                </div>
                                 {/* (בעתיד נוסיף כאן לוגיקה לבחירת סוג שאלה ואפשרויות) */}
                             </div>
                         ))}

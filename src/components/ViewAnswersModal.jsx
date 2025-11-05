@@ -1,9 +1,11 @@
 // src/components/ViewAnswersModal.jsx
-// --- רכיב חדש לצפייה בתשובות וטיפול ---
+// --- גרסה V2.0 (תמיכה בסוגי שאלות) ---
 
 import React, { useState } from 'react';
 
-// (רכיבי עזר פנימיים)
+// =================================================================
+// --- רכיבי עזר פנימיים ---
+// =================================================================
 const LoadingSpinner = () => (
     <div className="text-center p-5">
         <div className="spinner w-8 h-8 mx-auto border-t-primary-blue border-r-primary-blue"></div>
@@ -26,16 +28,41 @@ const AlertMessage = ({ type, message, onDismiss }) => {
 };
 const ButtonSpinner = () => ( <div className="spinner w-5 h-5 border-t-white border-r-white border-b-white border-l-primary-blue"></div> );
 
+// --- !!! רכיב פנימי חדש להצגת דירוג !!! ---
+const StarRatingDisplay = ({ score }) => {
+    const stars = [1, 2, 3, 4, 5];
+    const numericScore = Number(score) || 0;
+    
+    return (
+        <div className="flex gap-1" style={{direction: 'ltr'}}>
+            {stars.map(starValue => (
+                <svg
+                    key={starValue}
+                    className="w-5 h-5" // גודל קטן יותר לצפייה
+                    fill={numericScore >= starValue ? "#FFD700" : "#E0E0E0"}
+                    viewBox="0 0 20 20"
+                >
+                    <path d="M10 15l-5.878 3.09 1.123-6.545L.489 7.02l6.561-.955L10 0l2.95 6.065 6.561.955-4.756 4.625L15.878 18.09z"/>
+                </svg>
+            ))}
+            <span className="text-gray-600 text-sm font-semibold mr-2">({numericScore} / 5)</span>
+        </div>
+    );
+};
 
+// =================================================================
+// --- רכיב ראשי: ViewAnswersModal ---
+// =================================================================
 const ViewAnswersModal = ({ authToken, API_URL, review, onClose, onActionComplete }) => {
     const [therapistResponse, setTherapistResponse] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    // ממפה את השאלות והתשובות למבנה נוח
+    // --- !!! התיקון כאן: שולפים גם את סוג השאלה !!! ---
     const qaPairs = review.questions.map(question => ({
         question: question.text,
-        answer: review.answers[question.id] || '(לא סופקה תשובה)'
+        answer: review.answers[question.id] || '(לא סופקה תשובה)',
+        type: question.type || 'text' // ברירת מחדל לטקסט אם הסוג חסר
     }));
 
     const handleAction = async (action) => {
@@ -78,7 +105,13 @@ const ViewAnswersModal = ({ authToken, API_URL, review, onClose, onActionComplet
                     {qaPairs.map((qa, index) => (
                         <div key={index} className="p-3 border border-gray-200 rounded-md">
                             <p className="text-sm font-semibold text-gray-800">{qa.question}</p>
-                            <p className="text-gray-600 mt-1">{qa.answer}</p>
+                            
+                            {/* --- !!! התיקון כאן: הצגה מותנית לפי סוג !!! --- */}
+                            {qa.type === 'rating' ? (
+                                <StarRatingDisplay score={qa.answer} />
+                            ) : (
+                                <p className="text-gray-600 mt-1">{qa.answer}</p>
+                            )}
                         </div>
                     ))}
                     
