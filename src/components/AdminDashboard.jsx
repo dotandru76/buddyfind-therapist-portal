@@ -2,9 +2,11 @@
 // --- גרסה V7.3 (תיקון באג הסתרת כפתורים והוספת Settings) ---
 
 import React, { useState, useEffect, useCallback } from 'react';
+import moment from 'moment'; // נדרש: npm install moment
 import ActionModal from './ActionModal'; 
 import RegistrationsGraph from './RegistrationsGraph'; 
 import QuestionnaireManager from './QuestionnaireManager'; 
+import SettingsManager from './SettingsManager'; // ייבוא ה-SettingsManager
 
 // =================================================================
 // --- רכיבי עזר פנימיים (הועברו לכאן כדי להימנע מריבוי קבצים קטנים) ---
@@ -42,6 +44,7 @@ const ActionCard = ({ title, value, color, onClick }) => {
         blue: 'from-blue-50 to-blue-100 border-blue-300 text-blue-800 hover:shadow-blue-200',
         red: 'from-red-50 to-red-100 border-red-300 text-red-800 hover:shadow-red-200',
         purple: 'from-purple-50 to-purple-100 border-purple-300 text-purple-800 hover:shadow-purple-200', 
+        gray: 'from-gray-50 to-gray-100 border-gray-300 text-gray-800 hover:shadow-gray-200',
     };
 
     return (
@@ -55,7 +58,7 @@ const ActionCard = ({ title, value, color, onClick }) => {
     );
 };
 
-// --- !!! רכיב ניהול הגדרות !!! ---
+// --- רכיב ניהול הגדרות ---
 const SettingsManager = ({ authToken, API_URL, onBack }) => {
     const [settings, setSettings] = useState({});
     const [loading, setLoading] = useState(true);
@@ -142,11 +145,96 @@ const SettingsManager = ({ authToken, API_URL, onBack }) => {
                         <button
                             onClick={() => handleSave('questionnaire_delay_days')}
                             disabled={saving}
-                            className="py-1 px-3 bg-primary-blue text-white rounded-md text-xs font-medium hover:bg-secondary-purple disabled:opacity-50"
+                            className="py-1 px-3 bg-primary-blue text-white rounded-lg text-xs font-medium hover:bg-secondary-purple disabled:opacity-50"
                         >
                             שמור
                         </button>
                     </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- רכיב עזר: Admin Action Button (מציג נתונים במודאל) ---
+// (הוחזר לכאן כי הוא נמחק קודם)
+const AdminActionButton = ({ title, subtitle, apiEndpoint, authToken, tableHeaders, tableKeys }) => {
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [data, setData] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const res = await fetch(apiEndpoint, {
+                headers: { 'Authorization': `Bearer ${authToken}` },
+            });
+            if (!res.ok) throw new Error(`שגיאה ${res.status}: קריאת נתונים נכשלה.`);
+            const result = await res.json();
+            setData(result);
+            setIsModalOpen(true);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    }, [apiEndpoint, authToken]);
+
+    return (
+        <>
+            <div className="p-4 border border-gray-200 rounded-lg bg-gray-50 flex justify-between items-center">
+                <div>
+                    <h4 className="font-semibold text-lg text-text-dark">{title}</h4>
+                    <p className="text-sm text-gray-500">{subtitle}</p>
+                </div>
+                <button
+                    onClick={fetchData}
+                    disabled={loading}
+                    className="py-2 px-4 bg-primary-blue text-white rounded-lg text-sm font-semibold hover:bg-secondary-purple transition disabled:opacity-50"
+                >
+                    {loading ? 'טוען...' : 'הצג פרטים'}
+                </button>
+            </div>
+        </>
+    );
+};
+
+// --- רכיב המודאל המציג את הנתונים (טבלת נתונים) ---
+const DataModal = ({ title, data, headers, keys, onClose, error }) => {
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
+            <div className="bg-white p-6 md:p-8 rounded-2xl w-full max-w-4xl relative shadow-xl text-right max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                <h2 className="text-2xl font-bold text-text-dark mb-4 border-b pb-2">{title}</h2>
+                <button onClick={onClose} className="absolute top-4 left-4 text-gray-500 text-2xl leading-none transition hover:text-red-500">&times;</button>
+                
+                {error && <AlertMessage type="error" message={error} />}
+
+                <div className="mt-4">
+                    <table className="min-w-full divide-y divide-gray-200 text-sm">
+                        <thead className="bg-gray-50">
+                            <tr>
+                                {headers.map((header, index) => (
+                                    <th key={index} className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        {header}
+                                    </th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                            {data?.map((item, index) => (
+                                <tr key={index} className="hover:bg-gray-50">
+                                    {keys.map((key, kIndex) => (
+                                        <td key={kIndex} className="px-4 py-3 whitespace-nowrap text-gray-800">
+                                            {/* (moment.js required for proper date formatting) */}
+                                            {moment(item[key]).isValid() ? moment(item[key]).format('DD/MM/YY HH:mm') : item[key]}
+                                        </td>
+                                    ))}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -270,7 +358,17 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
                             tableKeys={['full_name', 'profession', 'email', 'active_status', 'view_count']}
                         />
                         
-                        {/* כפתור 3: ניהול הגדרות דינמיות */}
+                        {/* כפתור 3: רשימת לקוחות */}
+                        <AdminActionButton 
+                            title="רשימת לקוחות רשומים"
+                            subtitle={`סך ${stats.totalUsers} משתמשים רשומים (כולל קוד אנונימי)`}
+                            apiEndpoint={`${API_URL}/api/admin/users/all`}
+                            authToken={authToken}
+                            tableHeaders={['ID', 'אימייל', 'קוד אנונימי', 'תאריך הרשמה']}
+                            tableKeys={['id', 'email', 'anonymous_id', 'created_at']}
+                        />
+
+                        {/* כפתור 4: ניהול הגדרות דינמיות */}
                         <div className="p-4 border border-gray-200 rounded-lg bg-gray-50 flex justify-between items-center">
                             <div>
                                 <h4 className="font-semibold text-lg text-text-dark">ניהול הגדרות מערכת</h4>
