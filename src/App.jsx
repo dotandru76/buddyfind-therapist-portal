@@ -1,5 +1,5 @@
 // src/App.jsx (של buddyfind-therapist-portal)
-// --- גרסה V3.1 (תיקון באג הצגת פרופיל למנהל) ---
+// --- גרסה V3.2 (תיקון בדיקת מזהה משתמש) ---
 
 import React, { useState, useEffect } from 'react';
 import LoginModal from './components/LoginModal';
@@ -35,7 +35,6 @@ const App = () => {
             }
             const data = await res.json();
             setUser(data);
-            // --- !!! התיקון כאן: קובע תצוגה ראשית נכונה !!! ---
             if (data.user_type === 'admin') {
                 setNav('admin'); // מנהל תמיד יתחיל בדשבורד
             } else {
@@ -103,6 +102,9 @@ const App = () => {
     const renderNav = () => {
         if (!user) return null;
         const isAdmin = user.user_type === 'admin';
+        // --- !!! התיקון כאן: בודק user.id (מזהה מטפל) במקום professionalId ---
+        const hasProfile = user.id !== null; 
+
         return (
             <nav className="flex justify-center gap-6 mb-8 border-b border-gray-200">
                 {isAdmin && (
@@ -114,8 +116,7 @@ const App = () => {
                     </button>
                 )}
                 
-                {/* --- !!! התיקון כאן: הצג טאבים אלו רק אם אתה לא מנהל, או אם אתה מנהל *ויש* לך פרופיל מטפל --- */}
-                {(user.user_type === 'professional' || (isAdmin && user.professionalId)) && (
+                {hasProfile && (
                     <>
                         <button 
                             onClick={() => setNav('profile')}
@@ -164,8 +165,8 @@ const App = () => {
                 {renderNav()}
                 {error && <div className="p-4 mb-4 text-red-700 bg-red-100 border border-red-400 rounded text-right">{error}</div>}
                 
-                {/* --- !!! התיקון כאן: הצג רק אם יש ID מטפל --- */}
-                {user.professionalId && nav === 'profile' && (
+                {/* --- !!! התיקון כאן: בודק user.id (מזהה מטפל) וגם nav --- */}
+                {user.id && nav === 'profile' && (
                     <ProfileEditor 
                         authToken={authToken} 
                         API_URL={API_URL} 
@@ -175,8 +176,7 @@ const App = () => {
                     />
                 )}
                 
-                {/* --- !!! התיקון כאן: הצג רק אם יש ID מטפל --- */}
-                {user.professionalId && nav === 'reviews' && (
+                {user.id && nav === 'reviews' && (
                     <TherapistReviewManager 
                         authToken={authToken} 
                         API_URL={API_URL} 

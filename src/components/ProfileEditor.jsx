@@ -1,8 +1,10 @@
-// src/components/ProfileEditor.jsx (V23.0 - Race Condition Fix + Online Location Fix)
+// src/components/ProfileEditor.jsx 
+// --- גרסה V23.1 (תיקון בדיקת מזהה משתמש) ---
+
 import React, { useState, useEffect, useRef } from 'react';
 import ImageCropper from './ImageCropper';
 import { getCroppedImg } from '../utils/cropImage';
-import AgeRangeSelector from './AgeRangeSelector.jsx'; // <-- הייבוא של הרכיב החדש
+import AgeRangeSelector from './AgeRangeSelector.jsx'; 
 
 // --- Helper Components ---
 const AlertMessage = ({ type, message, onDismiss }) => {
@@ -21,14 +23,17 @@ const AlertMessage = ({ type, message, onDismiss }) => {
     );
 };
 const ButtonSpinner = ({ color = 'primary-blue' }) => ( <div className={`spinner w-5 h-5 border-t-white border-r-white border-b-white border-l-${color}`}></div> );
+const LoadingSpinner = () => (
+    <div className="text-center p-10"><div className="spinner"></div></div>
+);
 
 // --- Main Component ---
 const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) => {
     const [formData, setFormData] = useState({
         full_name: '', email: '', phone_number: '', bio: '', profession_id: '',
         years_of_practice: 0, profile_image_url: '/default-profile.png',
-        specialties: [], locations: [], availability: {}, // <--- !!! התיקון כאן: הוספנו פסיק !!!
-        age_ranges: [] // <-- השורה החדשה
+        specialties: [], locations: [], availability: {}, 
+        age_ranges: [] 
     });
     
     // --- State for dynamic definitions ---
@@ -53,40 +58,37 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
     useEffect(() => {
         let isMounted = true;
         const fetchInitialData = async () => {
-            if (!user?.professionalId || !authToken) {
-                console.error("ProfileEditor: Fetch aborted - missing professionalId or authToken.", { user, authToken });
+            
+            // --- !!! התיקון כאן: בודק user.id במקום user.professionalId !!! ---
+            if (!user?.id || !authToken) {
+                console.error("ProfileEditor: Fetch aborted - missing professionalId (user.id) or authToken.", { user, authToken });
                 setError("שגיאה בטעינת נתונים: פרטי המשתמש אינם תקינים.");
                 if (isMounted) setLoading(false);
                 return;
             }
+            // --- !!! סוף התיקון !!! ---
+
             if (isMounted) setLoading(true); setError(null); setMessage(null);
             console.log("ProfileEditor: Fetching profile and options...");
 
             try {
                 const fetchOptions = { headers: { 'Authorization': `Bearer ${authToken}` } };
-                const [profileRes, optionsRes] = await Promise.all([
-                    fetch(`${API_URL}/api/professionals/me`, fetchOptions),
-                    fetch(`${API_URL}/api/data/options`, fetchOptions) 
-                ]);
+                // --- !!! התיקון כאן: משתמש ב-user.id כדי לטעון את הפרופיל הנכון מה-API ---
+                // (הערה: ה-API /me כבר יודע מי המשתמש מהטוקן, אבל ה-user prop מכיל את המידע שנטען ב-App)
                 
-                console.log(`ProfileEditor: Statuses - Profile: ${profileRes.status}, Options: ${optionsRes.status}`);
+                // טוען את האפשרויות
+                const optionsRes = await fetch(`${API_URL}/api/data/options`, fetchOptions);
+                console.log(`ProfileEditor: Statuses - Options: ${optionsRes.status}`);
+
                 if (!isMounted) return;
 
-                if (profileRes.status === 401 || profileRes.status === 403 || optionsRes.status === 401 || optionsRes.status === 403) {
+                if (optionsRes.status === 401 || optionsRes.status === 403) {
                      if (onLogout) onLogout(); return;
-                 }
-
-                if (!profileRes.ok) {
-                    let errorBodyText = '', errorJson = {};
-                    try { errorBodyText = await profileRes.text(); errorJson = JSON.parse(errorBodyText || '{}'); } catch (parseError) { errorBodyText = `(Could not parse error: ${parseError.message})`; }
-                    console.error(`ProfileEditor: Profile fetch failed! Status: ${profileRes.status}, Body: ${errorBodyText}`);
-                    const fetchError = new Error(errorJson.error || `Failed profile fetch (${profileRes.status}) - ${errorBodyText}`);
-                    fetchError.responseStatus = profileRes.status; fetchError.responseBody = errorBodyText;
-                    throw fetchError;
                 }
-                 if (!optionsRes.ok) { const optionsErrorData = await optionsRes.json(); throw new Error(optionsErrorData.error || `Failed options fetch (${optionsRes.status})`); }
+                
+                if (!optionsRes.ok) { const optionsErrorData = await optionsRes.json(); throw new Error(optionsErrorData.error || `Failed options fetch (${optionsRes.status})`); }
 
-                const profileData = await profileRes.json();
+                const profileData = user; // המידע כבר נטען ב-App.jsx
                 const optionsData = await optionsRes.json();
                 console.log("ProfileEditor: Fetched data successfully.");
 
@@ -117,7 +119,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                         specialties: profileData.specialty_ids || [], 
                         locations: profileData.locations || [], 
                         availability: availability || {}, 
-                        age_ranges: profileData.age_ranges || [] // <-- טעינת הנתונים החדשים
+                        age_ranges: profileData.age_ranges || [] 
                     });
                     console.log("ProfileEditor: Set states successfully.");
                 }
@@ -133,7 +135,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
         };
         fetchInitialData();
         return () => { isMounted = false; console.log("ProfileEditor: Cleanup effect."); };
-    }, [authToken, API_URL, user?.professionalId, onLogout]);
+    }, [authToken, API_URL, user, onLogout]); // 'user' נוסף לרשימת התלויות
 
 
     // --- Filter specialties ---
@@ -149,7 +151,6 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
 
     // --- Handlers ---
     
-    // ✅ התיקון: איחוד עדכוני ה-State למניעת Race Condition
     const handleChange = (e) => {
          const { name, value, type } = e.target;
          
@@ -157,7 +158,6 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
             const newValue = type === 'number' ? parseInt(value, 10) || 0 : value;
             const newState = { ...prev, [name]: newValue };
             
-            // איפוס התמחויות על שינוי מקצוע
             if (name === 'profession_id') {
                 newState.specialties = [];
             }
@@ -167,7 +167,6 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
          
          setMessage(null); setError(null);
     };
-    // --- סוף התיקון ---
 
     const handleSpecialtyToggle = (specialtyId) => {
         setFormData(prev => ({ ...prev, specialties: prev.specialties.includes(specialtyId) ? prev.specialties.filter(id => id !== specialtyId) : [...prev.specialties, specialtyId] }));
@@ -232,15 +231,14 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
             payload.years_of_practice = parseInt(payload.years_of_practice, 10) || 0;
             payload.specialties = payload.specialties || []; 
             
-            // Filter locations (Online fix)
             payload.locations = (payload.locations || [])
                 .map(loc => ({ city: loc.city?.trim(), region: loc.region })) 
                 .filter(loc => 
-                    loc.region && // Must have a region
-                    (loc.city || loc.region === 'online') // Must have a city OR the region is 'online'
+                    loc.region && 
+                    (loc.city || loc.region === 'online') 
                 );
             
-            payload.age_ranges = formData.age_ranges || []; // <-- שליחת הנתונים החדשים
+            payload.age_ranges = formData.age_ranges || []; 
 
             console.log("CLEAN Payload being sent:", payload);
 
@@ -250,7 +248,6 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
             
             const data = await res.json(); 
             
-            // Check for explicit specialty validation error from the server
             if (res.status === 400 && data.error && data.error.includes('התמחויות')) {
                  throw new Error(data.error);
             }
@@ -260,6 +257,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
             }
             
             setMessage('✅ פרטי הפרופיל עודכנו!'); 
+            if(onUpdateSuccess) onUpdateSuccess(); // קריאה לפונקציה שמרעננת את App
             
         } catch (err) { 
             console.error('Profile Update error:', err); 
@@ -280,7 +278,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
     };
 
     // --- Render ---
-    if (loading) { return <div className="text-center p-10"><div className="spinner"></div></div>; }
+    if (loading) { return <LoadingSpinner />; }
     if (error && !formData.email) { return <AlertMessage type="error" message={error} onDismiss={() => setError(null)} />; }
 
     return (
