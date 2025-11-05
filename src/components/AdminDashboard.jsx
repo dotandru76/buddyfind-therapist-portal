@@ -1,16 +1,75 @@
-// src/components/AdminDashboard.jsx (V4.0 - Action Focused Dashboard)
+// src/components/AdminDashboard.jsx
+// --- גרסה V6.0 (עם 4 כרטיסיות + גרף) ---
+
 import React, { useState, useEffect, useCallback } from 'react';
-import moment from 'moment';
-import ActionCard from './ActionCard'; // ניצור את הקובץ הזה
-import ActionModal from './ActionModal'; // וניצור גם את הקובץ הזה
-import LoadingSpinner from './LoadingSpinner'; // נשתמש ברכיב קיים
-import AlertMessage from './AlertMessage'; // נשתמש ברכיב קיים
+import ActionModal from './ActionModal'; // זהו הקובץ היחיד שנייבא
+import RegistrationsGraph from './RegistrationsGraph'; // <-- ייבוא הגרף החדש
+
+// =================================================================
+// --- רכיבי עזר פנימיים (כדי למנוע יצירת קבצים קטנים) ---
+// =================================================================
+
+const LoadingSpinner = () => (
+    <div className="text-center p-5">
+        <div className="spinner w-8 h-8 mx-auto border-t-primary-blue border-r-primary-blue"></div>
+    </div>
+);
+
+const AlertMessage = ({ type, message, onDismiss }) => {
+    if (!message) return null;
+    const baseClasses = "px-4 py-3 rounded relative mb-4 text-right";
+    const typeClasses = type === 'success' 
+        ? "bg-green-100 border-green-400 text-green-700" 
+        : "bg-red-100 border-red-400 text-red-700";
+    
+    return (
+        <div className={`${baseClasses} ${typeClasses}`} role="alert">
+            <span className="block sm:inline">{message}</span>
+            {onDismiss && (
+                <span className="absolute top-0 bottom-0 left-0 px-4 py-3 cursor-pointer" onClick={onDismiss}>
+                    <svg className="fill-current h-6 w-6 text-red-500" role="button" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                        <title>Close</title>
+                        <path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z"/>
+                    </svg>
+                </span>
+            )}
+        </div>
+    );
+};
+
+const ActionCard = ({ title, value, color, onClick }) => {
+    const colorClasses = {
+        yellow: 'from-yellow-50 to-yellow-100 border-yellow-300 text-yellow-800 hover:shadow-yellow-200',
+        green: 'from-green-50 to-green-100 border-green-300 text-green-800 hover:shadow-green-200',
+        blue: 'from-blue-50 to-blue-100 border-blue-300 text-blue-800 hover:shadow-blue-200',
+        red: 'from-red-50 to-red-100 border-red-300 text-red-800 hover:shadow-red-200', // <-- צבע חדש לערעורים
+    };
+
+    return (
+        <button
+            onClick={onClick}
+            className={`p-6 border rounded-lg bg-gradient-to-br transition-all duration-300 transform hover:-translate-y-1 hover:shadow-lg ${colorClasses[color]}`}
+        >
+            <div className="text-5xl font-extrabold">{value}</div>
+            <div className="text-lg font-semibold mt-2">{title}</div>
+        </button>
+    );
+};
+
+// =================================================================
+// --- הרכיב הראשי: AdminDashboard ---
+// =================================================================
 
 const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
-    const [stats, setStats] = useState({ totalUsers: 0, totalProfessionals: 0, totalPendingReviews: 0 });
+    const [stats, setStats] = useState({ 
+        totalUsers: 0, 
+        totalProfessionals: 0, 
+        totalPendingReviews: 0,
+        totalDisputedReviews: 0 // <-- סטטוס חדש
+    });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [currentModal, setCurrentModal] = useState(null); // 'reviews', 'professionals', 'users'
+    const [currentModal, setCurrentModal] = useState(null); // 'reviews', 'professionals', 'users', 'disputed'
 
     // --- קריאת API סטטיסטית ראשונית ---
     const fetchAdminStats = useCallback(async () => {
@@ -25,7 +84,7 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
                  throw new Error('שגיאה בטעינת נתונים סטטיסטיים.');
             }
             const data = await statsRes.json();
-            setStats(data);
+            setStats(data); // <-- ה-API המעודכן מחזיר עכשיו את כל 4 הערכים
         } catch (err) {
             setError(err.message);
         } finally {
@@ -40,7 +99,6 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
     // --- פונקציה שתטפל בעדכון ה-API לאחר פעולה במודאל ---
     const handleActionComplete = () => {
         fetchAdminStats(); // רענון הנתונים הסטטיסטיים
-        setCurrentModal(null); // סגירת המודאל
     };
 
     if (loading) { return <LoadingSpinner />; }
@@ -51,13 +109,19 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
             
             {error && <AlertMessage type="error" message={error} onDismiss={() => setError(null)} />}
 
-            {/* 1. רכיבי הפעולה החדשים (מחליפים את הסטטיסטיקה הפאסיבית) */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* 1. רכיבי הפעולה החדשים - 4 כרטיסיות */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <ActionCard
                     title="חוות דעת ממתינות"
                     value={stats.totalPendingReviews}
                     color="yellow"
                     onClick={() => setCurrentModal('reviews')}
+                />
+                <ActionCard
+                    title="ערעורים לטיפול"
+                    value={stats.totalDisputedReviews}
+                    color="red"
+                    onClick={() => setCurrentModal('disputed')}
                 />
                 <ActionCard
                     title="מטפלים פעילים"
@@ -66,17 +130,17 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
                     onClick={() => setCurrentModal('professionals')}
                 />
                 <ActionCard
-                    title="משתמשים רשומים (כללי)"
+                    title="משתמשים רשומים"
                     value={stats.totalUsers}
                     color="blue"
                     onClick={() => setCurrentModal('users')}
                 />
             </div>
             
-            {/* 2. אזור הגרפים (כפי שביקשת) - שלב עתידי */}
-            <div className="p-4 bg-gray-100 rounded-lg">
-                <h3 className="text-xl font-bold text-text-dark mb-4 border-b pb-2">ניתוח מגמות (בקרוב)</h3>
-                <p className="text-sm text-gray-700">[כאן יופיע הגרף של נרשמים חדשים לפי יום]</p>
+            {/* 2. אזור הגרפים */}
+            <div className="p-6 bg-white rounded-lg shadow">
+                <h3 className="text-xl font-bold text-text-dark mb-4 border-b pb-2">נרשמים חדשים (30 יום אחרונים)</h3>
+                <RegistrationsGraph authToken={authToken} API_URL={API_URL} />
             </div>
             
             {/* 3. המודאל החכם שמופעל לפי לחיצה */}

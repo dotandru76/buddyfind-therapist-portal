@@ -1,12 +1,41 @@
 // src/components/ActionModal.jsx
-// --- גרסה מתוקנת (עם נתיב API נכון) ---
+// --- גרסה V3.0 (כולל טיפול בערעורים - Disputed) ---
 
 import React, { useState, useEffect, useMemo } from 'react';
 import moment from 'moment';
-import LoadingSpinner from './LoadingSpinner';
-import AlertMessage from './AlertMessage';
 
-// רכיב פנימי לכפתורי הפעולה בטבלה
+// =================================================================
+// --- רכיבי עזר פנימיים (כדי למנוע יצירת קבצים קטנים) ---
+// =================================================================
+
+const LoadingSpinner = () => (
+    <div className="text-center p-5">
+        <div className="spinner w-8 h-8 mx-auto border-t-primary-blue border-r-primary-blue"></div>
+    </div>
+);
+
+const AlertMessage = ({ type, message, onDismiss }) => {
+    if (!message) return null;
+    const baseClasses = "px-4 py-3 rounded relative mb-4 text-right";
+    const typeClasses = type === 'success' 
+        ? "bg-green-100 border-green-400 text-green-700" 
+        : "bg-red-100 border-red-400 text-red-700";
+    
+    return (
+        <div className={`${baseClasses} ${typeClasses}`} role="alert">
+            <span className="block sm:inline">{message}</span>
+            {onDismiss && (
+                <span className="absolute top-0 bottom-0 left-0 px-4 py-3 cursor-pointer" onClick={onDismiss}>
+                    <svg className="fill-current h-6 w-6 text-red-500" role="button" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                        <title>Close</title>
+                        <path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z"/>
+                    </svg>
+                </span>
+            )}
+        </div>
+    );
+};
+
 const ActionButton = ({ onClick, text, color, isLoading }) => (
     <button
         onClick={onClick}
@@ -21,6 +50,10 @@ const ActionButton = ({ onClick, text, color, isLoading }) => (
     </button>
 );
 
+// =================================================================
+// --- הרכיב הראשי: ActionModal ---
+// =================================================================
+
 const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete }) => {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -33,10 +66,15 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
             case 'reviews':
                 return {
                     title: 'ניהול חוות דעת ממתינות',
-                    // --- !!! התיקון בוצע כאן !!! ---
-                    endpoint: `${API_URL}/api/admin/reviews/pending-admin`, // תוקן מ-pending
-                    // -----------------------------
+                    endpoint: `${API_URL}/api/admin/reviews/pending-admin`,
                     headers: ['תאריך', 'קוד לקוח', 'ביקורת', 'פעולות'],
+                };
+            // --- !!! הוספנו מקרה חדש לטיפול בערעורים !!! ---
+            case 'disputed':
+                return {
+                    title: 'טיפול בערעורים',
+                    endpoint: `${API_URL}/api/admin/reviews/disputed`,
+                    headers: ['מטפל מערער', 'לקוח', 'ביקורת', 'פעולות'],
                 };
             case 'professionals':
                 return {
@@ -61,6 +99,9 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
         setLoading(true); setError(null);
         fetch(config.endpoint, { headers: { 'Authorization': `Bearer ${authToken}` } })
             .then(res => {
+                if (res.status === 404) { 
+                    throw new Error('הנתיב לא נמצא (404). ודא שה-API בשרת מעודכן.');
+                }
                 if (!res.ok) throw new Error('שגיאה בטעינת הנתונים.');
                 return res.json();
             })
@@ -79,8 +120,8 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
                 body: JSON.stringify({ newStatus }),
             });
             if (!res.ok) throw new Error('הפעולה נכשלה.');
-            setData(prev => prev.filter(item => item.id !== reviewId)); // הסר מהרשימה
-            onActionComplete(); // רענן סטטיסטיקה
+            setData(prev => prev.filter(item => item.id !== reviewId)); 
+            onActionComplete(); 
         } catch (err) {
             setError(err.message);
         } finally {
@@ -88,8 +129,49 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
         }
     };
     
-    // (פונקציה לניהול מטפלים - נוסיף בהמשך)
-    // const handleProfessionalAction = async (profId, newStatus) => { ... }
+    // --- !!! פונקציה חדשה לטיפול בערעורים !!! ---
+    const handleDisputeAction = async (reviewId, newStatus) => {
+        setActionLoading(reviewId);
+        try {
+            const res = await fetch(`${API_URL}/api/admin/reviews/${reviewId}/resolve-dispute`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                body: JSON.stringify({ newStatus }), // 'published' or 'rejected'
+            });
+            if (!res.ok) throw new Error('הפעולה נכשלה.');
+            setData(prev => prev.filter(item => item.id !== reviewId));
+            onActionComplete();
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const handleProfessionalAction = async (profId, currentStatus) => {
+        setActionLoading(profId);
+        const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+        
+        try {
+            const res = await fetch(`${API_URL}/api/admin/professionals/${profId}/status`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                body: JSON.stringify({ active_status: newStatus }),
+            });
+            if (!res.ok) throw new Error('הפעולה נכשלה.');
+            
+            setData(prevData => 
+                prevData.map(item => 
+                    item.id === profId ? { ...item, active_status: newStatus } : item
+                )
+            );
+            onActionComplete(); 
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setActionLoading(null);
+        }
+    };
 
 
     // --- פונקציות עזר לרנדור טבלה ---
@@ -117,7 +199,32 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
                         </td>
                     </tr>
                 );
+            // --- !!! רינדור חדש עבור ערעורים !!! ---
+            case 'disputed':
+                return (
+                    <tr key={item.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 whitespace-nowrap font-semibold">{item.professional_name}</td>
+                        <td className="px-4 py-3 whitespace-nowrap font-mono">{item.client_anon_id}</td>
+                        <td className="px-4 py-3 text-sm">{item.review_text}</td>
+                        <td className="px-4 py-3 whitespace-nowrap space-x-2 space-x-reverse">
+                            <ActionButton
+                                text="קבל ערעור (דחה)"
+                                color="red"
+                                isLoading={actionLoading === item.id}
+                                onClick={() => handleDisputeAction(item.id, 'rejected')}
+                            />
+                            <ActionButton
+                                text="דחה ערעור (פרסם)"
+                                color="green"
+                                isLoading={actionLoading === item.id}
+                                onClick={() => handleDisputeAction(item.id, 'published')}
+                            />
+                        </td>
+                    </tr>
+                );
             case 'professionals':
+                const newStatusText = item.active_status === 'active' ? 'השעה' : 'הפעל';
+                const newStatusColor = item.active_status === 'active' ? 'red' : 'green';
                 return (
                     <tr key={item.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 whitespace-nowrap font-semibold">{item.full_name}</td>
@@ -132,10 +239,10 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap space-x-2 space-x-reverse">
                             <ActionButton
-                                text={item.active_status === 'active' ? 'השעה' : 'הפעל'}
-                                color="red"
+                                text={newStatusText}
+                                color={newStatusColor}
                                 isLoading={actionLoading === item.id}
-                                onClick={() => alert('בקרוב: טיפול במטפלים')} // כאן נחבר את ה-API
+                                onClick={() => handleProfessionalAction(item.id, item.active_status)}
                             />
                         </td>
                     </tr>
@@ -161,7 +268,7 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
                 <h2 className="text-2xl font-bold text-text-dark mb-4 border-b pb-2">{config.title}</h2>
                 <button onClick={onClose} className="absolute top-4 left-4 text-gray-500 text-2xl leading-none transition hover:text-red-500">&times;</button>
                 
-                {error && <AlertMessage type="error" message={error} />}
+                {error && <AlertMessage type="error" message={error} onDismiss={() => setError(null)} />}
                 {loading && <LoadingSpinner />}
 
                 {!loading && !error && (
