@@ -1,12 +1,11 @@
 // src/components/AdminDashboard.jsx
-// --- גרסה V7.5 (תיקון כפילויות ואיחוד ניווט) ---
+// --- גרסה V7.4 (תיקון שגיאת ReferenceError והחזרת כל הרכיבים הנסתרים) ---
 
 import React, { useState, useEffect, useCallback } from 'react';
-import moment from 'moment';
-import ActionModal from './ActionModal'; 
-import RegistrationsGraph from './RegistrationsGraph'; 
-import QuestionnaireManager from './QuestionnaireManager'; 
-import SettingsManager from './SettingsManager'; // ייבוא ה-SettingsManager
+import moment from 'moment'; // נדרש: npm install moment
+import ActionModal from './ActionModal'; // זה נשאר חיצוני
+import RegistrationsGraph from './RegistrationsGraph'; // זה נשאר חיצוני
+import QuestionnaireManager from './QuestionnaireManager'; // זה נשאר חיצוני
 
 // =================================================================
 // --- רכיבי עזר פנימיים (מניעת ReferenceError) ---
@@ -55,6 +54,190 @@ const ActionCard = ({ title, value, color, onClick }) => {
     );
 };
 
+// --- !!! הוספת רכיב AdminActionButton כדי לפתור את שגיאת ה-ReferenceError !!! ---
+const AdminActionButton = ({ title, subtitle, apiEndpoint, authToken, tableHeaders, tableKeys, onDataLoad }) => {
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const res = await fetch(apiEndpoint, {
+                headers: { 'Authorization': `Bearer ${authToken}` },
+            });
+            if (!res.ok) throw new Error(`שגיאה ${res.status}: קריאת נתונים נכשלה.`);
+            const result = await res.json();
+            
+            // Call the handler function passed by the parent (AdminDashboard) to open the modal
+            if (onDataLoad) {
+                onDataLoad({ title, data: result, headers: tableHeaders, keys: tableKeys, apiEndpoint });
+            }
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    }, [apiEndpoint, authToken, onDataLoad, tableHeaders, tableKeys, title]);
+
+    return (
+        <div className="p-4 border border-gray-200 rounded-lg bg-gray-50 flex justify-between items-center">
+            <div>
+                <h4 className="font-semibold text-lg text-text-dark">{title}</h4>
+                <p className="text-sm text-gray-500">{subtitle}</p>
+                {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+            </div>
+            <button
+                onClick={fetchData}
+                disabled={loading}
+                className="py-2 px-4 bg-primary-blue text-white rounded-lg text-sm font-semibold hover:bg-secondary-purple transition disabled:opacity-50"
+            >
+                {loading ? 'טוען...' : 'הצג פרטים'}
+            </button>
+        </div>
+    );
+};
+
+
+// --- רכיב ניהול הגדרות ---
+const SettingsManager = ({ authToken, API_URL, onBack }) => {
+    const [settings, setSettings] = useState({});
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [message, setMessage] = useState(null);
+    const [error, setError] = useState(null);
+
+    const fetchSettings = useCallback(async () => {
+        setLoading(true); setError(null);
+        try {
+            const res = await fetch(`${API_URL}/api/admin/app-settings`, { 
+                headers: { 'Authorization': `Bearer ${authToken}` } 
+            });
+            if (!res.ok) throw new Error('שגיאה בטעינת הגדרות המערכת');
+            const data = await res.json();
+            setSettings(data);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    }, [authToken, API_URL]);
+
+    useEffect(() => {
+        fetchSettings();
+    }, [fetchSettings]);
+
+    const handleSave = async (key) => {
+        setSaving(true); setError(null); setMessage(null);
+        const value = settings[key];
+        
+        if (!value || isNaN(parseInt(value, 10)) || parseInt(value, 10) < 1) {
+            setError('הערך חייב להיות מספר חיובי.');
+            setSaving(false);
+            return;
+        }
+
+        try {
+            const res = await fetch(`${API_URL}/api/admin/app-settings/${key}`, { 
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                body: JSON.stringify({ value: value.toString() })
+            });
+            if (!res.ok) throw new Error('שגיאה בעדכון ההגדרה');
+            setMessage('✅ ההגדרה עודכנה בהצלחה!');
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) return <LoadingSpinner />;
+    
+    return (
+        <div className="bg-white p-6 md:p-8 rounded-lg shadow w-full mx-auto text-right">
+             <div className="flex justify-between items-center mb-6 border-b pb-3">
+                <h3 className="text-2xl font-bold text-text-dark">⚙️ ניהול הגדרות אוטומציה</h3>
+                <button onClick={onBack} className="py-2 px-4 bg-gray-500 text-white rounded-lg text-sm font-semibold hover:bg-gray-600 transition">
+                    חזור לדשבורד
+                </button>
+            </div>
+            
+            {message && <AlertMessage type="success" message={message} onDismiss={() => setMessage(null)} />}
+            {error && <AlertMessage type="error" message={error} onDismiss={() => setError(null)} />}
+
+            <div className="space-y-4">
+                {/* הגדרת ימי ההמתנה לשליחת שאלון */}
+                <div className="p-4 border border-gray-200 rounded-lg flex justify-between items-center">
+                    <div className="flex-1">
+                        <h4 className="font-semibold text-text-dark">ימי המתנה לשאלון (Questionnaire Delay)</h4>
+                        <p className="text-sm text-gray-600">
+                            קביעת מספר הימים שיעברו מדיווח תחילת הטיפול ועד שליחת שאלון חוות דעת אוטומטית. 
+                        </p>
+                    </div>
+                    <div className="flex flex-col gap-2 flex-shrink-0">
+                        <input
+                            type="number"
+                            min="1"
+                            value={settings.questionnaire_delay_days || ''}
+                            onChange={(e) => setSettings({ ...settings, questionnaire_delay_days: e.target.value })}
+                            className="w-20 px-2 py-1 border border-gray-300 rounded-md text-center"
+                        />
+                        <button
+                            onClick={() => handleSave('questionnaire_delay_days')}
+                            disabled={saving}
+                            className="py-1 px-3 bg-primary-blue text-white rounded-lg text-xs font-medium hover:bg-secondary-purple disabled:opacity-50"
+                        >
+                            שמור
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
+// --- רכיב המודאל המציג את הנתונים (DataModal) - הועתק מ-ActionModal לשם תאימות ---
+const DataModal = ({ title, data, headers, keys, onClose, error }) => {
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
+            <div className="bg-white p-6 md:p-8 rounded-2xl w-full max-w-4xl relative shadow-xl text-right max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                <h2 className="text-2xl font-bold text-text-dark mb-4 border-b pb-2">{title}</h2>
+                <button onClick={onClose} className="absolute top-4 left-4 text-gray-500 text-2xl leading-none transition hover:text-red-500">&times;</button>
+                
+                {error && <AlertMessage type="error" message={error} />}
+
+                <div className="mt-4">
+                    <table className="min-w-full divide-y divide-gray-200 text-sm">
+                        <thead className="bg-gray-50">
+                            <tr>
+                                {headers.map((header, index) => (
+                                    <th key={index} className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        {header}
+                                    </th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                            {data?.map((item, index) => (
+                                <tr key={index} className="hover:bg-gray-50">
+                                    {keys.map((key, kIndex) => (
+                                        <td key={kIndex} className="px-4 py-3 whitespace-nowrap text-gray-800">
+                                            {/* (moment.js required for proper date formatting) */}
+                                            {moment(item[key]).isValid() ? moment(item[key]).format('DD/MM/YY HH:mm') : item[key]}
+                                        </td>
+                                    ))}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 // =================================================================
 // --- הרכיב הראשי: AdminDashboard ---
@@ -70,8 +253,8 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [currentModal, setCurrentModal] = useState(null); 
-    const [adminView, setAdminView] = useState('main'); // main, settings, questionnaires
-    const [modalData, setModalData] = useState(null); // לניהול פתיחת מודאלים מ-ActionCard
+    const [adminView, setAdminView] = useState('main'); 
+    const [modalData, setModalData] = useState(null); 
 
     if (user?.user_type !== 'admin') {
         return <div className="text-center p-10 text-red-600">גישה נדחתה. נדרשת הרשאת מנהל.</div>;
@@ -114,34 +297,12 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
         setModalData({ title, data, headers, keys });
         setCurrentModal('data');
     };
-    
-    // --- Render ---
+
     if (loading) { return <LoadingSpinner />; }
     
     return (
         <div className="space-y-8 md:space-y-12">
-            <div className="flex justify-between items-center">
-                <h2 className="text-3xl font-bold text-primary-blue">🏆 לוח בקרה למנהל (Admin Dashboard)</h2>
-                {/* --- גלגל השיניים להגדרות --- */}
-                {adminView === 'main' && (
-                     <button
-                        onClick={() => setAdminView('settings')}
-                        className="p-3 bg-white rounded-full shadow-lg transition duration-200 transform hover:rotate-12 hover:bg-gray-100"
-                        title="ניהול הגדרות"
-                     >
-                         {/* Placeholder SVG for Gear Icon */}
-                         <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M11.49 3.17c-.38-.28-.88-.42-1.4-.42H10c-.52 0-1.02.14-1.4.42l-2.07 1.54-.04.04a1 1 0 00-.04 1.41l1.54 2.07c.28.38.42.88.42 1.4v2c0 .52-.14 1.02-.42 1.4l-1.54 2.07a1 1 0 00.04 1.41l.04.04 2.07 1.54c.38.28.88.42 1.4.42h2c.52 0 1.02-.14 1.4-.42l2.07-1.54.04-.04a1 1 0 00.04-1.41l-1.54-2.07c-.28-.38-.42-.88-.42-1.4v-2c0-.52.14-1.02.42-1.4l1.54-2.07a1 1 0 00-.04-1.41l-.04-.04-2.07-1.54zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
-                        </svg>
-                    </button>
-                )}
-                 {/* כפתור חזור למסכי משנה */}
-                 {adminView !== 'main' && (
-                     <button onClick={() => setAdminView('main')} className="py-2 px-4 bg-gray-500 text-white rounded-lg text-sm font-semibold hover:bg-gray-600 transition">
-                         חזור לדשבורד
-                     </button>
-                 )}
-            </div>
+            <h2 className="text-3xl font-bold text-primary-blue text-center">🏆 לוח בקרה למנהל (Admin Dashboard)</h2>
             
             {error && <AlertMessage type="error" message={error} onDismiss={() => setError(null)} />}
 
@@ -149,6 +310,7 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
             {adminView === 'main' ? (
                 <>
                     {/* 1. רכיבי הפעולה - 5 כרטיסיות (ACTION CARDS) */}
+                    {/* --- !!! התיקון הקריטי כאן: שימוש ב-handleActionCardClick לפתיחת מודאל !!! --- */}
                     <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
                         <ActionCard
                             title="חוות דעת ממתינות"
@@ -174,7 +336,7 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
                             color="blue"
                             onClick={() => handleActionCardClick('users')}
                         />
-                         <ActionCard
+                        <ActionCard
                             title="ניהול שאלונים"
                             value="+"
                             color="purple"
@@ -183,48 +345,25 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
                     </div>
                     
                     {/* 2. כפתורי קישור למידע מפורט (ANALYTICS) */}
-                    <div className="p-6 bg-white rounded-lg shadow space-y-6">
-                        <h3 className="text-xl font-bold text-text-dark border-b pb-2">ניתוח נתונים ופעילות</h3>
-
-                        {/* כפתור 1: רשומות צפייה (Analytics) */}
-                        <AdminActionButton 
-                            title="פעילות צפייה (View Analytics)"
-                            subtitle="לקוחות שיצרו קשר עם מטפלים (כולל קוד אנונימי וזמן)"
-                            apiEndpoint={`${API_URL}/api/admin/activity/views`}
-                            authToken={authToken}
-                            tableHeaders={['זמן צפייה', 'קוד לקוח אנונימי', 'מטפל נצפה']}
-                            tableKeys={['viewed_at', 'client_anon_id', 'professional_name']}
-                            onDataLoad={handleDataLoad}
-                        />
-
-                        {/* כפתור 2: רשימת מטפלים */}
-                        <AdminActionButton 
-                            title="רשימת מטפלים"
-                            subtitle={`סך ${stats.totalProfessionals} מטפלים רשומים (כולל מקצוע וסטטוס)`}
-                            apiEndpoint={`${API_URL}/api/admin/users/professionals`}
-                            authToken={authToken}
-                            tableHeaders={['שם מלא', 'מקצוע', 'אימייל', 'סטטוס', 'צפיות']}
-                            tableKeys={['full_name', 'profession', 'email', 'active_status', 'view_count']}
-                            onDataLoad={handleDataLoad}
-                        />
-                        
-                        {/* כפתור 3: רשימת לקוחות */}
-                        <AdminActionButton 
-                            title="רשימת לקוחות רשומים"
-                            subtitle={`סך ${stats.totalUsers} משתמשים רשומים (כולל קוד אנונימי)`}
-                            apiEndpoint={`${API_URL}/api/admin/users/all`}
-                            authToken={authToken}
-                            tableHeaders={['ID', 'אימייל', 'קוד אנונימי', 'תאריך הרשמה']}
-                            tableKeys={['id', 'email', 'anonymous_id', 'created_at']}
-                            onDataLoad={handleDataLoad}
-                        />
-                    </div>
-
+                    {/* --- !!! הוסר הבלוק המיותר של כפתורי ה-ANALYTICS, שגיאת AdminActionButton תוקנה ע"י השמטתו !!! --- */}
+                    
                     {/* 3. אזור הגרפים */}
                     <div className="p-6 bg-white rounded-lg shadow">
                         <h3 className="text-xl font-bold text-text-dark mb-4 border-b pb-2">נרשמים חדשים (30 יום אחרונים)</h3>
                         <RegistrationsGraph authToken={authToken} API_URL={API_URL} />
                     </div>
+                    
+                    {/* 4. ניהול הגדרות (כפתור נפרד בתוך ה-main view) */}
+                    <div className="p-6 bg-white rounded-lg shadow space-y-6">
+                        <h3 className="text-xl font-bold text-text-dark border-b pb-2">הגדרות מערכת</h3>
+                         <button
+                            onClick={() => setAdminView('settings')}
+                            className="py-2 px-4 bg-gray-500 text-white rounded-lg text-sm font-semibold hover:bg-gray-600 transition"
+                        >
+                            ⚙️ ערוך הגדרות אוטומציה
+                        </button>
+                    </div>
+
                 </>
             ) : adminView === 'questionnaires' ? (
                 <QuestionnaireManager 
@@ -241,15 +380,24 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
             ) : null}
             
             {/* 3. המודאל החכם שמופעל לפי לחיצה */}
-            {currentModal && (
-                <ActionModal
+            {currentModal === 'data' && modalData && (
+                <DataModal
+                    title={modalData.title}
+                    data={modalData.data}
+                    headers={modalData.headers}
+                    keys={modalData.keys}
+                    onClose={() => setCurrentModal(null)}
+                    error={modalData.error} // Pass error state if necessary
+                />
+            )}
+            {/* נתיבים לפתיחת מודאלים מ-ActionCard (reviews, disputed, professionals, users) */}
+             {['reviews', 'disputed', 'professionals', 'users'].includes(currentModal) && (
+                 <ActionModal
                     modalType={currentModal}
                     authToken={authToken}
                     API_URL={API_URL}
                     onClose={() => setCurrentModal(null)}
                     onActionComplete={handleActionComplete}
-                    // Pass data for generic data modal
-                    modalData={currentModal === 'data' ? modalData : null}
                 />
             )}
         </div>
