@@ -1,5 +1,5 @@
 // src/App.jsx (של buddyfind-therapist-portal)
-// --- גרסה V3.3 (תיקון באג snake_case / camelCase) ---
+// --- גרסה V3.3 (הוספת ניווט לדיווח טיפול) ---
 
 import React, { useState, useEffect } from 'react';
 import LoginModal from './components/LoginModal';
@@ -7,6 +7,7 @@ import RegisterModal from './components/RegisterModal';
 import ProfileEditor from './components/ProfileEditor';
 import TherapistReviewManager from './components/TherapistReviewManager'; 
 import AdminDashboard from './components/AdminDashboard';
+import LogContactForm from './components/LogContactForm'; // <-- ייבוא הרכיב החדש
 
 const API_URL = 'https://buddyfind-api.onrender.com';
 const LOGO_URL = 'https://res.cloudinary.com/dermarx8t/image/upload/v1761900572/WellMatch_logo_ktdyfy.png';
@@ -30,21 +31,20 @@ const App = () => {
                 if (res.status === 401 || res.status === 403) {
                     throw new Error('פג תוקף, יש להתחבר מחדש.');
                 }
-                const data = await res.json(); // נסה לקרוא את גוף השגיאה
+                const data = await res.json(); 
                 throw new Error(data.error || 'שגיאה בטעינת פרופיל');
             }
             const data = await res.json();
             setUser(data);
-            // קביעת תצוגה ראשית נכונה
             if (data.user_type === 'admin') {
-                setNav('admin'); // מנהל תמיד יתחיל בדשבורד
+                setNav('admin'); 
             } else {
-                setNav('profile'); // מטפל תמיד יתחיל בפרופיל
+                setNav('profile'); 
             }
         } catch (err) {
             console.error(err);
             setError(err.message);
-            handleLogout(); // התנתק אם יש שגיאה
+            handleLogout(); 
         } finally {
             setLoading(false);
         }
@@ -78,7 +78,6 @@ const App = () => {
                 alert('הרשמה בוצעה בהצלחה! אנא התחבר.');
                 setView('login');
             } else {
-                // --- !!! התיקון הקריטי כאן (בדיקת snake_case) !!! ---
                 if (data.user_type !== 'professional' && data.user_type !== 'admin') {
                     throw new Error('גישה מורשית למטפלים ומנהלים בלבד.');
                 }
@@ -104,8 +103,7 @@ const App = () => {
     const renderNav = () => {
         if (!user) return null;
         const isAdmin = user.user_type === 'admin';
-        // --- !!! התיקון הקריטי כאן (בדיקת פרופיל) !!! ---
-        const hasProfile = user.user_type === 'professional' || (user.user_type === 'admin' && user.id !== null);
+        const hasProfile = user.id !== null; 
 
         return (
             <nav className="flex justify-center gap-6 mb-8 border-b border-gray-200">
@@ -131,6 +129,13 @@ const App = () => {
                             className={`py-4 px-2 text-sm font-semibold ${nav === 'reviews' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}
                         >
                             ניהול חוות דעת
+                        </button>
+                        {/* --- !!! הוספת לשונית חדשה !!! --- */}
+                        <button 
+                            onClick={() => setNav('log_contact')}
+                            className={`py-4 px-2 text-sm font-semibold ${nav === 'log_contact' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            דיווח תחילת טיפול
                         </button>
                     </>
                 )}
@@ -167,7 +172,7 @@ const App = () => {
                 {renderNav()}
                 {error && <div className="p-4 mb-4 text-red-700 bg-red-100 border border-red-400 rounded text-right">{error}</div>}
                 
-                {/* הבדיקה (user.id) כאן נכונה - היא בודקת אם קיים פרופיל מטפל */}
+                {/* 1. עריכת פרופיל */}
                 {user.id && nav === 'profile' && (
                     <ProfileEditor 
                         authToken={authToken} 
@@ -178,6 +183,7 @@ const App = () => {
                     />
                 )}
                 
+                {/* 2. ניהול חוות דעת */}
                 {user.id && nav === 'reviews' && (
                     <TherapistReviewManager 
                         authToken={authToken} 
@@ -186,6 +192,16 @@ const App = () => {
                     />
                 )}
                 
+                {/* 3. דיווח תחילת טיפול (החדש) */}
+                {user.id && nav === 'log_contact' && (
+                    <LogContactForm 
+                        authToken={authToken} 
+                        API_URL={API_URL} 
+                        user={user}
+                    />
+                )}
+                
+                {/* 4. דשבורד מנהל */}
                 {user.user_type === 'admin' && nav === 'admin' && (
                      <AdminDashboard 
                         authToken={authToken} 
