@@ -1,11 +1,11 @@
 // src/components/ActionModal.jsx
-// --- גרסה V3.0 (כולל טיפול בערעורים - Disputed) ---
+// --- גרסה V4.0 (הוספת אימות רישיון חצי-ידני) ---
 
 import React, { useState, useEffect, useMemo } from 'react';
 import moment from 'moment';
 
 // =================================================================
-// --- רכיבי עזר פנימיים (כדי למנוע יצירת קבצים קטנים) ---
+// --- רכיבי עזר פנימיים ---
 // =================================================================
 
 const LoadingSpinner = () => (
@@ -36,15 +36,17 @@ const AlertMessage = ({ type, message, onDismiss }) => {
     );
 };
 
-const ActionButton = ({ onClick, text, color, isLoading }) => (
+const ActionButton = ({ onClick, text, color, isLoading, ...props }) => (
     <button
         onClick={onClick}
         disabled={isLoading}
         className={`px-3 py-1 text-xs font-medium text-white rounded-md transition ${
             color === 'green' ? 'bg-green-500 hover:bg-green-600' : 
             color === 'red' ? 'bg-red-500 hover:bg-red-600' : 
+            color === 'blue' ? 'bg-blue-500 hover:bg-blue-600' :
             'bg-gray-500 hover:bg-gray-600'
         } disabled:opacity-50`}
+        {...props} // מאפשר להעביר props נוספים כמו 'title'
     >
         {isLoading ? '...' : text}
     </button>
@@ -69,7 +71,6 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
                     endpoint: `${API_URL}/api/admin/reviews/pending-admin`,
                     headers: ['תאריך', 'קוד לקוח', 'ביקורת', 'פעולות'],
                 };
-            // --- !!! הוספנו מקרה חדש לטיפול בערעורים !!! ---
             case 'disputed':
                 return {
                     title: 'טיפול בערעורים',
@@ -80,7 +81,8 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
                 return {
                     title: 'ניהול מטפלים',
                     endpoint: `${API_URL}/api/admin/users/professionals`,
-                    headers: ['שם', 'מקצוע', 'צפיות', 'סטטוס', 'פעולות'],
+                    // <<< הוספה חדשה: עמודות "רישיון" ו"אימות"
+                    headers: ['שם', 'מקצוע', 'מספר רישיון', 'סטטוס', 'פעולות'],
                 };
             case 'users':
                 return {
@@ -129,7 +131,6 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
         }
     };
     
-    // --- !!! פונקציה חדשה לטיפול בערעורים !!! ---
     const handleDisputeAction = async (reviewId, newStatus) => {
         setActionLoading(reviewId);
         try {
@@ -173,6 +174,35 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
         }
     };
 
+    // --- !!! פונקציה חדשה לאימות רישיון !!! ---
+    const handleVerifyAction = async (profId, newVerifyStatus) => {
+        setActionLoading(`${profId}-verify`); // מזהה ייחודי לפעולת האימות
+        try {
+            const res = await fetch(`${API_URL}/api/admin/professionals/${profId}/verify`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                body: JSON.stringify({ is_verified: newVerifyStatus }), // 0 או 1
+            });
+            
+            if (!res.ok) {
+                 const data = await res.json();
+                 throw new Error(data.error || 'הפעולה נכשלה.');
+            }
+            
+            // עדכון ה-UI באופן מיידי
+            setData(prevData => 
+                prevData.map(item => 
+                    item.id === profId ? { ...item, is_verified: newVerifyStatus } : item
+                )
+            );
+            onActionComplete(); 
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
 
     // --- פונקציות עזר לרנדור טבלה ---
     const renderRow = (item) => {
@@ -180,6 +210,7 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
             case 'reviews':
                 return (
                     <tr key={item.id} className="hover:bg-gray-50">
+                        {/* ... (אין שינוי) ... */}
                         <td className="px-4 py-3 whitespace-nowrap">{moment(item.created_at).format('DD/MM/YY')}</td>
                         <td className="px-4 py-3 whitespace-nowrap font-mono">{item.client_anon_id}</td>
                         <td className="px-4 py-3 text-sm">{item.review_text}</td>
@@ -199,10 +230,10 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
                         </td>
                     </tr>
                 );
-            // --- !!! רינדור חדש עבור ערעורים !!! ---
             case 'disputed':
                 return (
                     <tr key={item.id} className="hover:bg-gray-50">
+                        {/* ... (אין שינוי) ... */}
                         <td className="px-4 py-3 whitespace-nowrap font-semibold">{item.professional_name}</td>
                         <td className="px-4 py-3 whitespace-nowrap font-mono">{item.client_anon_id}</td>
                         <td className="px-4 py-3 text-sm">{item.review_text}</td>
@@ -225,31 +256,83 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
             case 'professionals':
                 const newStatusText = item.active_status === 'active' ? 'השעה' : 'הפעל';
                 const newStatusColor = item.active_status === 'active' ? 'red' : 'green';
+                
+                // --- !!! הקישור החכם נוצר כאן !!! ---
+                // (הערה: נצטרך להתאים את ה-URL הזה אם הוא לא מדויק)
+                const licenseCheckUrl = `https://practitioners.health.gov.il/Practitioners/Search?name=${encodeURIComponent(item.full_name)}&license_num=${item.license_number || ''}`;
+                
                 return (
                     <tr key={item.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 whitespace-nowrap font-semibold">{item.full_name}</td>
                         <td className="px-4 py-3 whitespace-nowrap">{item.profession}</td>
-                        <td className="px-4 py-3 whitespace-nowrap text-center font-bold">{item.view_count}</td>
+                        
+                        {/* <<< עמודה חדשה: מספר רישיון >>> */}
+                        <td className="px-4 py-3 whitespace-nowrap font-mono">
+                            {item.license_number ? (
+                                <a 
+                                    href={licenseCheckUrl} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:text-blue-800 hover:underline"
+                                    title="לחץ לבדיקה במשרד הבריאות"
+                                >
+                                    {item.license_number} 🔗
+                                </a>
+                            ) : (
+                                <span className="text-gray-400">לא הוזן</span>
+                            )}
+                        </td>
+                        
                         <td className="px-4 py-3 whitespace-nowrap">
                             <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
                                 item.active_status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
                             }`}>
                                 {item.active_status === 'active' ? 'פעיל' : 'מושעה'}
                             </span>
+                            
+                            {/* <<< תצוגת סטטוס אימות >>> */}
+                            {item.is_verified === 1 && (
+                                <span className="ml-2 px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                                    מאומת
+                                </span>
+                            )}
                         </td>
+                        
+                        {/* <<< עמודת פעולות מעודכנת >>> */}
                         <td className="px-4 py-3 whitespace-nowrap space-x-2 space-x-reverse">
                             <ActionButton
                                 text={newStatusText}
                                 color={newStatusColor}
                                 isLoading={actionLoading === item.id}
                                 onClick={() => handleProfessionalAction(item.id, item.active_status)}
+                                title={newStatusText + ' מטפל'}
                             />
+                            
+                            {/* כפתור אימות/ביטול אימות */}
+                            {item.is_verified === 0 ? (
+                                <ActionButton
+                                    text="אשר וי"
+                                    color="blue"
+                                    isLoading={actionLoading === `${item.id}-verify`}
+                                    onClick={() => handleVerifyAction(item.id, 1)}
+                                    title="סמן כמטפל מאומת"
+                                />
+                            ) : (
+                                <ActionButton
+                                    text="בטל וי"
+                                    color="gray"
+                                    isLoading={actionLoading === `${item.id}-verify`}
+                                    onClick={() => handleVerifyAction(item.id, 0)}
+                                    title="בטל אימות מטפל"
+                                />
+                            )}
                         </td>
                     </tr>
                 );
             case 'users': 
                  return (
                     <tr key={item.id} className="hover:bg-gray-50">
+                        {/* ... (אין שינוי) ... */}
                         <td className="px-4 py-3">{item.email}</td>
                         <td className="px-4 py-3">{item.user_type}</td>
                         <td className="px-4 py-3 font-mono">{item.anonymous_id}</td>

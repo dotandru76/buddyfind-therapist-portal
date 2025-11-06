@@ -1,5 +1,4 @@
 // src/components/ProfileEditor.jsx 
-// --- גרסה V23.1 (תיקון בדיקת מזהה משתמש) ---
 
 import React, { useState, useEffect, useRef } from 'react';
 import ImageCropper from './ImageCropper';
@@ -33,7 +32,8 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
         full_name: '', email: '', phone_number: '', bio: '', profession_id: '',
         years_of_practice: 0, profile_image_url: '/default-profile.png',
         specialties: [], locations: [], availability: {}, 
-        age_ranges: [] 
+        age_ranges: [],
+        license_number: '' // <<< הוספה חדשה
     });
     
     // --- State for dynamic definitions ---
@@ -59,22 +59,18 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
         let isMounted = true;
         const fetchInitialData = async () => {
             
-            // --- !!! התיקון כאן: בודק user.id במקום user.professionalId !!! ---
             if (!user?.id || !authToken) {
                 console.error("ProfileEditor: Fetch aborted - missing professionalId (user.id) or authToken.", { user, authToken });
                 setError("שגיאה בטעינת נתונים: פרטי המשתמש אינם תקינים.");
                 if (isMounted) setLoading(false);
                 return;
             }
-            // --- !!! סוף התיקון !!! ---
 
             if (isMounted) setLoading(true); setError(null); setMessage(null);
             console.log("ProfileEditor: Fetching profile and options...");
 
             try {
                 const fetchOptions = { headers: { 'Authorization': `Bearer ${authToken}` } };
-                // --- !!! התיקון כאן: משתמש ב-user.id כדי לטעון את הפרופיל הנכון מה-API ---
-                // (הערה: ה-API /me כבר יודע מי המשתמש מהטוקן, אבל ה-user prop מכיל את המידע שנטען ב-App)
                 
                 // טוען את האפשרויות
                 const optionsRes = await fetch(`${API_URL}/api/data/options`, fetchOptions);
@@ -119,7 +115,9 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                         specialties: profileData.specialty_ids || [], 
                         locations: profileData.locations || [], 
                         availability: availability || {}, 
-                        age_ranges: profileData.age_ranges || [] 
+                        age_ranges: profileData.age_ranges || [],
+                        license_number: profileData.license_number || '', // <<< הוספה חדשה
+                        is_verified: profileData.is_verified || 0 // <<< הוספה חדשה
                     });
                     console.log("ProfileEditor: Set states successfully.");
                 }
@@ -135,7 +133,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
         };
         fetchInitialData();
         return () => { isMounted = false; console.log("ProfileEditor: Cleanup effect."); };
-    }, [authToken, API_URL, user, onLogout]); // 'user' נוסף לרשימת התלויות
+    }, [authToken, API_URL, user, onLogout]); 
 
 
     // --- Filter specialties ---
@@ -226,10 +224,13 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
         console.log("Data being sent to server:", formData);
         
         try {
-            const { profile_image_url, email, availability, ...payload } = formData;
+            // <<< הוספה חדשה: פירוק is_verified
+            const { profile_image_url, email, availability, is_verified, ...payload } = formData;
+            
             payload.profession_id = parseInt(payload.profession_id, 10) || null;
             payload.years_of_practice = parseInt(payload.years_of_practice, 10) || 0;
             payload.specialties = payload.specialties || []; 
+            payload.license_number = formData.license_number || null; // <<< הוספה חדשה
             
             payload.locations = (payload.locations || [])
                 .map(loc => ({ city: loc.city?.trim(), region: loc.region })) 
@@ -290,6 +291,18 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
             {/* Profile Edit Form */}
             <form onSubmit={handleProfileSubmit} className="bg-white p-6 md:p-8 rounded-lg shadow w-full mx-auto text-right">
                 <h3 className="text-xl font-bold text-text-dark mb-6 border-b pb-3">פרטי פרופיל ומידע מקצועי</h3>
+                
+                {/* <<< הוספה חדשה: הצגת סטטוס אימות >>> */}
+                {formData.is_verified === 1 ? (
+                    <div className="mb-6 p-4 bg-green-50 border border-green-300 rounded-lg text-green-800 text-center font-semibold">
+                        ✔️ הפרופיל שלך אומת על ידי מנהל.
+                    </div>
+                ) : (
+                    <div className="mb-6 p-4 bg-yellow-50 border border-yellow-300 rounded-lg text-yellow-800 text-center font-semibold">
+                        ⚠️ הפרופיל שלך ממתין לאימות מנהל.
+                    </div>
+                )}
+                
                 <div className="flex flex-col-reverse md:flex-row gap-8 md:gap-12">
                     {/* Image Column */}
                     <div className="w-full md:w-56 flex flex-col items-center space-y-5 flex-shrink-0">
@@ -312,11 +325,28 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                     <div className="flex-1 space-y-6">
                         {/* Full Name */}
                         <div> <label htmlFor="full_name" className="block text-sm font-medium text-gray-700 mb-1">שם מלא</label> <input type="text" id="full_name" name="full_name" value={formData.full_name} onChange={handleChange} required className="block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-blue/50 focus:border-primary-blue"/> </div>
-                        {/* Profession & Years */}
-                        <div className="grid grid-cols-2 gap-4">
+                        
+                        {/* Profession, Years, License */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                              <div> <label htmlFor="profession_id" className="block text-sm font-medium text-gray-700 mb-1">מקצוע</label> <select id="profession_id" name="profession_id" value={formData.profession_id} onChange={handleChange} required className="block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-blue/50 focus:border-primary-blue bg-white appearance-none pr-8 bg-no-repeat bg-right" style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%path stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, backgroundPosition: 'left 0.5rem center', backgroundSize: '1.5em 1.5em' }}> <option value="" disabled>-- בחר מקצוע --</option> {(professions || []).map(p => ( <option key={p.id} value={p.id}>{p.name}</option> ))} </select> </div>
                              <div> <label htmlFor="years_of_practice" className="block text-sm font-medium text-gray-700 mb-1">שנות נסיון</label> <input type="number" id="years_of_practice" name="years_of_practice" value={formData.years_of_practice} onChange={handleChange} min="0" max="60" className="block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-blue/50 focus:border-primary-blue"/> </div>
+                             {/* <<< שדה חדש: מספר רישיון >>> */}
+                             <div> 
+                                <label htmlFor="license_number" className="block text-sm font-medium text-gray-700 mb-1">
+                                    מספר רישיון
+                                </label> 
+                                <input 
+                                    type="text" 
+                                    id="license_number" 
+                                    name="license_number" 
+                                    value={formData.license_number || ''} 
+                                    onChange={handleChange} 
+                                    placeholder="לדוגמה: 1-23456"
+                                    className="block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-blue/50 focus:border-primary-blue"
+                                /> 
+                            </div>
                         </div>
+                        
                         {/* Bio */}
                         <div> <label htmlFor="bio" className="block text-sm font-medium text-gray-700 mb-1">קצת עלי / גישה טיפולית</label> <textarea id="bio" name="bio" value={formData.bio || ''} onChange={handleChange} rows="4" placeholder="..." className="block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-blue/50 focus:border-primary-blue resize-none"/> </div>
                         {/* Specialties */}
@@ -412,6 +442,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                                                 title={`${day}, ${slot} - ${isSelected ? 'פנוי/ה (בטל)' : 'לא פנוי/ה (הוסף)'}`}>
                                             </td>
                                         );
+
                                     })}
                                 </tr>
                             ))}
