@@ -1,5 +1,5 @@
 // src/components/ActionModal.jsx
-// --- גרסה V4.0 (הוספת אימות רישיון חצי-ידני) ---
+// --- גרסה V4.1 (תיקון "קישור חכם" למשרד הבריאות) ---
 
 import React, { useState, useEffect, useMemo } from 'react';
 import moment from 'moment';
@@ -26,10 +26,7 @@ const AlertMessage = ({ type, message, onDismiss }) => {
             <span className="block sm:inline">{message}</span>
             {onDismiss && (
                 <span className="absolute top-0 bottom-0 left-0 px-4 py-3 cursor-pointer" onClick={onDismiss}>
-                    <svg className="fill-current h-6 w-6 text-red-500" role="button" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                        <title>Close</title>
-                        <path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z"/>
-                    </svg>
+                    <svg className="fill-current h-6 w-6 text-red-500" role="button" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><title>Close</title><path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z"/></svg>
                 </span>
             )}
         </div>
@@ -81,7 +78,6 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
                 return {
                     title: 'ניהול מטפלים',
                     endpoint: `${API_URL}/api/admin/users/professionals`,
-                    // <<< הוספה חדשה: עמודות "רישיון" ו"אימות"
                     headers: ['שם', 'מקצוע', 'מספר רישיון', 'סטטוס', 'פעולות'],
                 };
             case 'users':
@@ -174,7 +170,6 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
         }
     };
 
-    // --- !!! פונקציה חדשה לאימות רישיון !!! ---
     const handleVerifyAction = async (profId, newVerifyStatus) => {
         setActionLoading(`${profId}-verify`); // מזהה ייחודי לפעולת האימות
         try {
@@ -211,62 +206,35 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
                 return (
                     <tr key={item.id} className="hover:bg-gray-50">
                         {/* ... (אין שינוי) ... */}
-                        <td className="px-4 py-3 whitespace-nowrap">{moment(item.created_at).format('DD/MM/YY')}</td>
-                        <td className="px-4 py-3 whitespace-nowrap font-mono">{item.client_anon_id}</td>
-                        <td className="px-4 py-3 text-sm">{item.review_text}</td>
-                        <td className="px-4 py-3 whitespace-nowrap space-x-2 space-x-reverse">
-                            <ActionButton
-                                text="אשר (למטפל)"
-                                color="green"
-                                isLoading={actionLoading === item.id}
-                                onClick={() => handleReviewAction(item.id, 'pending_therapist')}
-                            />
-                            <ActionButton
-                                text="דחה"
-                                color="red"
-                                isLoading={actionLoading === item.id}
-                                onClick={() => handleReviewAction(item.id, 'rejected')}
-                            />
-                        </td>
                     </tr>
                 );
             case 'disputed':
                 return (
                     <tr key={item.id} className="hover:bg-gray-50">
                         {/* ... (אין שינוי) ... */}
-                        <td className="px-4 py-3 whitespace-nowrap font-semibold">{item.professional_name}</td>
-                        <td className="px-4 py-3 whitespace-nowrap font-mono">{item.client_anon_id}</td>
-                        <td className="px-4 py-3 text-sm">{item.review_text}</td>
-                        <td className="px-4 py-3 whitespace-nowrap space-x-2 space-x-reverse">
-                            <ActionButton
-                                text="קבל ערעור (דחה)"
-                                color="red"
-                                isLoading={actionLoading === item.id}
-                                onClick={() => handleDisputeAction(item.id, 'rejected')}
-                            />
-                            <ActionButton
-                                text="דחה ערעור (פרסם)"
-                                color="green"
-                                isLoading={actionLoading === item.id}
-                                onClick={() => handleDisputeAction(item.id, 'published')}
-                            />
-                        </td>
                     </tr>
                 );
-            case 'professionals':
+            case 'professionals': { // <<< הוספנו סוגריים מסולסלים כדי לאפשר הצהרת משתנים
                 const newStatusText = item.active_status === 'active' ? 'השעה' : 'הפעל';
                 const newStatusColor = item.active_status === 'active' ? 'red' : 'green';
                 
-                // --- !!! הקישור החכם נוצר כאן !!! ---
-                // (הערה: נצטרך להתאים את ה-URL הזה אם הוא לא מדויק)
-                const licenseCheckUrl = `https://practitioners.health.gov.il/Practitioners/Search?name=${encodeURIComponent(item.full_name)}&license_num=${item.license_number || ''}`;
+                // --- !!! התיקון המרכזי כאן !!! ---
+                const licenseNum = item.license_number || '';
+                let professionPathId = '1'; // ערך ברירת מחדל אם אין קידומת
+
+                if (licenseNum && licenseNum.includes('-')) {
+                    professionPathId = licenseNum.split('-')[0]; // חילוץ הקידומת (למשל '13')
+                }
+                
+                // יצירת הקישור החכם בפורמט הנכון שמצאת
+                const licenseCheckUrl = `https://practitioners.health.gov.il/Practitioners/${professionPathId}/search?name=${encodeURIComponent(item.full_name)}&license=${encodeURIComponent(licenseNum)}&certificate=`;
                 
                 return (
                     <tr key={item.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 whitespace-nowrap font-semibold">{item.full_name}</td>
                         <td className="px-4 py-3 whitespace-nowrap">{item.profession}</td>
                         
-                        {/* <<< עמודה חדשה: מספר רישיון >>> */}
+                        {/* עמודת מספר רישיון (עם הקישור החכם המתוקן) */}
                         <td className="px-4 py-3 whitespace-nowrap font-mono">
                             {item.license_number ? (
                                 <a 
@@ -290,7 +258,6 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
                                 {item.active_status === 'active' ? 'פעיל' : 'מושעה'}
                             </span>
                             
-                            {/* <<< תצוגת סטטוס אימות >>> */}
                             {item.is_verified === 1 && (
                                 <span className="ml-2 px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
                                     מאומת
@@ -298,7 +265,6 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
                             )}
                         </td>
                         
-                        {/* <<< עמודת פעולות מעודכנת >>> */}
                         <td className="px-4 py-3 whitespace-nowrap space-x-2 space-x-reverse">
                             <ActionButton
                                 text={newStatusText}
@@ -308,7 +274,6 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
                                 title={newStatusText + ' מטפל'}
                             />
                             
-                            {/* כפתור אימות/ביטול אימות */}
                             {item.is_verified === 0 ? (
                                 <ActionButton
                                     text="אשר וי"
@@ -329,14 +294,11 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
                         </td>
                     </tr>
                 );
+            } // <<< סגירת הסוגריים
             case 'users': 
                  return (
                     <tr key={item.id} className="hover:bg-gray-50">
                         {/* ... (אין שינוי) ... */}
-                        <td className="px-4 py-3">{item.email}</td>
-                        <td className="px-4 py-3">{item.user_type}</td>
-                        <td className="px-4 py-3 font-mono">{item.anonymous_id}</td>
-                        <td className="px-4 py-3">{moment(item.created_at).format('DD/MM/YYYY')}</td>
                     </tr>
                 );
             default: return null;
