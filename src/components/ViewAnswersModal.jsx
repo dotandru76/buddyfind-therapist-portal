@@ -1,5 +1,5 @@
 // src/components/ViewAnswersModal.jsx
-// --- גרסה V2.0 (תמיכה בסוגי שאלות) ---
+// --- גרסה V2.1 (שדרוג אייקון ללב) ---
 
 import React, { useState } from 'react';
 
@@ -28,8 +28,8 @@ const AlertMessage = ({ type, message, onDismiss }) => {
 };
 const ButtonSpinner = () => ( <div className="spinner w-5 h-5 border-t-white border-r-white border-b-white border-l-primary-blue"></div> );
 
-// --- !!! רכיב פנימי חדש להצגת דירוג !!! ---
-const StarRatingDisplay = ({ score }) => {
+// --- !!! רכיב פנימי חדש להצגת דירוג (עם לב) !!! ---
+const HeartRatingDisplay = ({ score }) => {
     const stars = [1, 2, 3, 4, 5];
     const numericScore = Number(score) || 0;
     
@@ -38,11 +38,11 @@ const StarRatingDisplay = ({ score }) => {
             {stars.map(starValue => (
                 <svg
                     key={starValue}
-                    className="w-5 h-5" // גודל קטן יותר לצפייה
+                    className="w-5 h-5"
                     fill={numericScore >= starValue ? "#FFD700" : "#E0E0E0"}
                     viewBox="0 0 20 20"
                 >
-                    <path d="M10 15l-5.878 3.09 1.123-6.545L.489 7.02l6.561-.955L10 0l2.95 6.065 6.561.955-4.756 4.625L15.878 18.09z"/>
+                    <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
                 </svg>
             ))}
             <span className="text-gray-600 text-sm font-semibold mr-2">({numericScore} / 5)</span>
@@ -58,11 +58,10 @@ const ViewAnswersModal = ({ authToken, API_URL, review, onClose, onActionComplet
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    // --- !!! התיקון כאן: שולפים גם את סוג השאלה !!! ---
     const qaPairs = review.questions.map(question => ({
         question: question.text,
         answer: review.answers[question.id] || '(לא סופקה תשובה)',
-        type: question.type || 'text' // ברירת מחדל לטקסט אם הסוג חסר
+        type: question.type || 'text' 
     }));
 
     const handleAction = async (action) => {
@@ -74,16 +73,16 @@ const ViewAnswersModal = ({ authToken, API_URL, review, onClose, onActionComplet
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${authToken}`,
                 },
-                body: JSON.stringify({ action, response: therapistResponse }), // 'publish' or 'dispute'
+                body: JSON.stringify({ action, response: therapistResponse }), 
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'הפעולה נכשלה');
             
-            onActionComplete(data.message); // סגור מודאל והצג הודעת הצלחה
+            onActionComplete(data.message); 
             
         } catch (err) {
             setError(err.message);
-            setLoading(false); // השאר מודאל פתוח במקרה של שגיאה
+            setLoading(false); 
         }
     };
 
@@ -106,9 +105,8 @@ const ViewAnswersModal = ({ authToken, API_URL, review, onClose, onActionComplet
                         <div key={index} className="p-3 border border-gray-200 rounded-md">
                             <p className="text-sm font-semibold text-gray-800">{qa.question}</p>
                             
-                            {/* --- !!! התיקון כאן: הצגה מותנית לפי סוג !!! --- */}
                             {qa.type === 'rating' ? (
-                                <StarRatingDisplay score={qa.answer} />
+                                <HeartRatingDisplay score={qa.answer} />
                             ) : (
                                 <p className="text-gray-600 mt-1">{qa.answer}</p>
                             )}

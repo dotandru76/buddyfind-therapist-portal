@@ -1,5 +1,5 @@
 // src/components/AdminResolveReviewModal.jsx
-// --- רכיב חדש עבור מנהל לטיפול בערעורים ---
+// --- גרסה V1.1 (שדרוג אייקון ללב) ---
 
 import React, { useState } from 'react';
 import moment from 'moment';
@@ -27,7 +27,8 @@ const AlertMessage = ({ type, message, onDismiss }) => {
 };
 const ButtonSpinner = () => ( <div className="spinner w-5 h-5 border-t-white border-r-white border-b-white border-l-primary-blue"></div> );
 
-const StarRatingDisplay = ({ score }) => {
+// --- !!! רכיב פנימי חדש להצגת דירוג (עם לב) !!! ---
+const HeartRatingDisplay = ({ score }) => {
     const stars = [1, 2, 3, 4, 5];
     const numericScore = Number(score) || 0;
     
@@ -40,7 +41,7 @@ const StarRatingDisplay = ({ score }) => {
                     fill={numericScore >= starValue ? "#FFD700" : "#E0E0E0"}
                     viewBox="0 0 20 20"
                 >
-                    <path d="M10 15l-5.878 3.09 1.123-6.545L.489 7.02l6.561-.955L10 0l2.95 6.065 6.561.955-4.756 4.625L15.878 18.09z"/>
+                    <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
                 </svg>
             ))}
             <span className="text-gray-600 text-sm font-semibold mr-2">({numericScore} / 5)</span>
@@ -63,7 +64,6 @@ const AdminResolveReviewModal = ({ authToken, API_URL, review, onClose, onAction
     const handleAction = async (action) => {
         setLoading(true); setError(null);
         try {
-            // זוהי הפונקציה הקריטית שמתקשרת עם הנתיב הנכון של המנהל
             const res = await fetch(`${API_URL}/api/admin/questionnaires/${review.id}/resolve-dispute`, {
                 method: 'PUT',
                 headers: {
@@ -72,13 +72,13 @@ const AdminResolveReviewModal = ({ authToken, API_URL, review, onClose, onAction
                 },
                 body: JSON.stringify({ 
                     newStatus: action, // 'published' or 'rejected'
-                    professionalId: review.professional_id // השרת צריך את זה לחישוב מחדש
+                    professionalId: review.professional_id 
                 }), 
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'הפעולה נכשלה');
             
-            onActionComplete(data.message); // סגור מודאל והצג הודעת הצלחה
+            onActionComplete(data.message); 
             
         } catch (err) {
             setError(err.message);
@@ -87,7 +87,6 @@ const AdminResolveReviewModal = ({ authToken, API_URL, review, onClose, onAction
     };
 
     return (
-        // שימוש באותם קלאסים כמו מודאלים אחרים
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
             <div className="bg-white p-6 md:p-8 rounded-2xl w-full max-w-2xl relative shadow-xl text-right max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                 <h2 className="text-xl font-bold text-text-dark mb-4 border-b pb-2">טיפול בערעור</h2>
@@ -106,7 +105,7 @@ const AdminResolveReviewModal = ({ authToken, API_URL, review, onClose, onAction
                         <div key={index} className="p-3 border border-gray-200 rounded-md">
                             <p className="text-sm font-semibold text-gray-800">{qa.question}</p>
                             {qa.type === 'rating' ? (
-                                <StarRatingDisplay score={qa.answer} />
+                                <HeartRatingDisplay score={qa.answer} />
                             ) : (
                                 <p className="text-gray-600 mt-1">{qa.answer}</p>
                             )}
