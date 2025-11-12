@@ -1,8 +1,9 @@
 // src/components/ActionModal.jsx
-// --- גרסה V4.2 (תיקון נתיב הערעורים) ---
+// --- גרסה V4.3 (מפעיל מודאל טיפול בערעור) ---
 
 import React, { useState, useEffect, useMemo } from 'react';
 import moment from 'moment';
+import AdminResolveReviewModal from './AdminResolveReviewModal'; // <-- !!! הוספה חדשה !!!
 
 // =================================================================
 // --- רכיבי עזר פנימיים ---
@@ -15,6 +16,7 @@ const LoadingSpinner = () => (
 );
 
 const AlertMessage = ({ type, message, onDismiss }) => {
+    // ... (קוד ללא שינוי)
     if (!message) return null;
     const baseClasses = "px-4 py-3 rounded relative mb-4 text-right";
     const typeClasses = type === 'success' 
@@ -34,6 +36,7 @@ const AlertMessage = ({ type, message, onDismiss }) => {
 };
 
 const ActionButton = ({ onClick, text, color, isLoading, ...props }) => (
+    // ... (קוד ללא שינוי)
     <button
         onClick={onClick}
         disabled={isLoading}
@@ -43,7 +46,7 @@ const ActionButton = ({ onClick, text, color, isLoading, ...props }) => (
             color === 'blue' ? 'bg-blue-500 hover:bg-blue-600' :
             'bg-gray-500 hover:bg-gray-600'
         } disabled:opacity-50`}
-        {...props} // מאפשר להעביר props נוספים כמו 'title'
+        {...props} 
     >
         {isLoading ? '...' : text}
     </button>
@@ -57,7 +60,8 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [actionLoading, setActionLoading] = useState(null); // ID של הפריט שמטופל
+    const [actionLoading, setActionLoading] = useState(null); 
+    const [viewingReview, setViewingReview] = useState(null); // <-- !!! הוספה חדשה !!!
 
     // הגדרת תצורות לכל סוג מודאל
     const config = useMemo(() => {
@@ -69,11 +73,10 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
                     headers: ['תאריך', 'קוד לקוח', 'ביקורת', 'פעולות'],
                 };
             case 'disputed':
-                // --- !!! התיקון כאן !!! ---
                 return {
                     title: 'טיפול בערעורים (מערכת שאלונים)',
-                    endpoint: `${API_URL}/api/admin/questionnaires/disputed`, // <-- התיקון
-                    headers: ['מטפל מערער', 'לקוח', 'שם שאלון', 'פעולות'], // <-- התיקון
+                    endpoint: `${API_URL}/api/admin/questionnaires/disputed`,
+                    headers: ['מטפל מערער', 'לקוח', 'שם שאלון', 'פעולות'],
                 };
             case 'professionals':
                 return {
@@ -110,17 +113,14 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
     }, [config, authToken]);
 
     // --- פונקציות לביצוע פעולות ---
-    // (הפונקציות האלו רלוונטיות רק למערכת הישנה והמטפלים. המערכת החדשה מטופלת ישירות ב-QuestionnaireManager)
-    // ... (פונקציות handleReviewAction, handleDisputeAction נשארות כפי שהן לטיפול במערכת הישנה אם צריך) ...
     const handleReviewAction = async (reviewId, newStatus) => {
         // ... (קוד ללא שינוי)
     };
     const handleDisputeAction = async (reviewId, newStatus) => {
         // ... (קוד ללא שינוי)
     };
-
-
     const handleProfessionalAction = async (profId, currentStatus) => {
+        // ... (קוד ללא שינוי)
         setActionLoading(profId);
         const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
         
@@ -144,8 +144,8 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
             setActionLoading(null);
         }
     };
-
     const handleVerifyAction = async (profId, newVerifyStatus) => {
+        // ... (קוד ללא שינוי)
         setActionLoading(`${profId}-verify`);
         try {
             const res = await fetch(`${API_URL}/api/admin/professionals/${profId}/verify`, {
@@ -172,13 +172,21 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
         }
     };
 
+    // --- !!! הוספה חדשה: פונקציה לסגירת מודאל הערעור ---
+    const handleResolveComplete = (message) => {
+        setError(message); // הצג הודעת הצלחה
+        setData(prev => prev.filter(item => item.id !== viewingReview.id)); // הסר מהרשימה
+        setViewingReview(null); // סגור את המודאל הפנימי
+        onActionComplete(); // רענן את הסטטיסטיקה בדשבורד
+    };
+
 
     // --- פונקציות עזר לרנדור טבלה ---
     const renderRow = (item) => {
         switch (modalType) {
-            // --- !!! התיקון כאן !!! ---
+            
             case 'disputed':
-                // זה יטפל עכשיו בנתונים מהמערכת החדשה
+                // --- !!! התיקון כאן !!! ---
                 return (
                     <tr key={item.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 whitespace-nowrap">{item.professional_name}</td>
@@ -186,17 +194,17 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
                         <td className="px-4 py-3 whitespace-nowrap">{item.questionnaire_name}</td>
                         <td className="px-4 py-3 whitespace-nowrap space-x-2 space-x-reverse">
                             <ActionButton
-                                text="פתח (טרם נתמך)"
+                                text="פתח לטיפול"
                                 color="blue"
                                 isLoading={actionLoading === item.id}
-                                onClick={() => alert("פונקציונליות פתיחת ערעור תתווסף כאן")}
+                                onClick={() => setViewingReview(item)} // <-- פותח את המודאל החדש
                             />
                         </td>
                     </tr>
                 );
             
             case 'reviews':
-                // זה מטפל במערכת הישנה
+                // ... (קוד ללא שינוי)
                 return (
                     <tr key={item.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 whitespace-nowrap">{new Date(item.created_at).toLocaleDateString('he-IL')}</td>
@@ -222,6 +230,7 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
                 );
                 
             case 'professionals': {
+                // ... (קוד ללא שינוי)
                 const newStatusText = item.active_status === 'active' ? 'השעה' : 'הפעל';
                 const newStatusColor = item.active_status === 'active' ? 'red' : 'green';
                 
@@ -301,6 +310,7 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
             } 
             case 'users': 
                  return (
+                    // ... (קוד ללא שינוי)
                     <tr key={item.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 whitespace-nowrap">{item.email}</td>
                         <td className="px-4 py-3 whitespace-nowrap">{item.user_type}</td>
@@ -315,36 +325,49 @@ const ActionModal = ({ modalType, authToken, API_URL, onClose, onActionComplete 
     if (!config) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-white p-6 md:p-8 rounded-2xl w-full max-w-4xl relative shadow-xl text-right max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-                <h2 className="text-2xl font-bold text-text-dark mb-4 border-b pb-2">{config.title}</h2>
-                <button onClick={onClose} className="absolute top-4 left-4 text-gray-500 text-2xl leading-none transition hover:text-red-500">&times;</button>
-                
-                {error && <AlertMessage type="error" message={error} onDismiss={() => setError(null)} />}
-                {loading && <LoadingSpinner />}
+        <>
+            {/* --- !!! הוספה חדשה: רינדור המודאל הפנימי !!! --- */}
+            {viewingReview && (
+                <AdminResolveReviewModal
+                    authToken={authToken}
+                    API_URL={API_URL}
+                    review={viewingReview}
+                    onClose={() => setViewingReview(null)}
+                    onActionComplete={handleResolveComplete}
+                />
+            )}
+        
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
+                <div className="bg-white p-6 md:p-8 rounded-2xl w-full max-w-4xl relative shadow-xl text-right max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                    <h2 className="text-2xl font-bold text-text-dark mb-4 border-b pb-2">{config.title}</h2>
+                    <button onClick={onClose} className="absolute top-4 left-4 text-gray-500 text-2xl leading-none transition hover:text-red-500">&times;</button>
+                    
+                    {error && <AlertMessage type="error" message={error} onDismiss={() => setError(null)} />}
+                    {loading && <LoadingSpinner />}
 
-                {!loading && !error && (
-                    <div className="mt-4">
-                        <table className="min-w-full divide-y divide-gray-200 text-sm">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    {config.headers.map((header) => (
-                                        <th key={header} className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            {header}
-                                        </th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {data.length > 0 ? data.map(renderRow) : (
-                                    <tr><td colSpan={config.headers.length} className="p-5 text-center text-gray-500">אין נתונים להצגה.</td></tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
+                    {!loading && !error && (
+                        <div className="mt-4">
+                            <table className="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        {config.headers.map((header) => (
+                                            <th key={header} className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                {header}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {data.length > 0 ? data.map(renderRow) : (
+                                        <tr><td colSpan={config.headers.length} className="p-5 text-center text-gray-500">אין נתונים להצגה.</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
             </div>
-        </div>
+        </>
     );
 };
 
