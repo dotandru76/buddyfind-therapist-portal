@@ -7,6 +7,7 @@ import AgeRangeSelector from './AgeRangeSelector.jsx';
 
 // --- Helper Components ---
 const AlertMessage = ({ type, message, onDismiss }) => {
+    // ... (קוד ללא שינוי)
     if (!message) return null;
     const baseClasses = "px-4 py-3 rounded relative mb-6 text-right";
     const typeClasses = type === 'success' ? "bg-green-100 border-green-400 text-green-700" : "bg-red-100 border-red-400 text-red-700";
@@ -33,16 +34,17 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
         years_of_practice: 0, profile_image_url: '/default-profile.png',
         specialties: [], locations: [], availability: {}, 
         age_ranges: [],
-        license_number: '' // <<< הוספה חדשה
+        license_number: '',
+        whatsapp_number: '' // <<< הוספה חדשה
     });
     
     // --- State for dynamic definitions ---
     const [professions, setProfessions] = useState([]);
     const [allSpecialties, setAllSpecialties] = useState([]);
     const [filteredSpecialties, setFilteredSpecialties] = useState([]);
-    const [defRegions, setDefRegions] = useState([]); // For regions dropdown
-    const [defDays, setDefDays] = useState([]);       // For availability table
-    const [defSlots, setDefSlots] = useState([]);     // For availability table
+    const [defRegions, setDefRegions] = useState([]); 
+    const [defDays, setDefDays] = useState([]);       
+    const [defSlots, setDefSlots] = useState([]);     
 
     const [loading, setLoading] = useState(true);
     const [savingProfile, setSavingProfile] = useState(false);
@@ -72,7 +74,6 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
             try {
                 const fetchOptions = { headers: { 'Authorization': `Bearer ${authToken}` } };
                 
-                // טוען את האפשרויות
                 const optionsRes = await fetch(`${API_URL}/api/data/options`, fetchOptions);
                 console.log(`ProfileEditor: Statuses - Options: ${optionsRes.status}`);
 
@@ -84,7 +85,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                 
                 if (!optionsRes.ok) { const optionsErrorData = await optionsRes.json(); throw new Error(optionsErrorData.error || `Failed options fetch (${optionsRes.status})`); }
 
-                const profileData = user; // המידע כבר נטען ב-App.jsx
+                const profileData = user; 
                 const optionsData = await optionsRes.json();
                 console.log("ProfileEditor: Fetched data successfully.");
 
@@ -116,8 +117,9 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                         locations: profileData.locations || [], 
                         availability: availability || {}, 
                         age_ranges: profileData.age_ranges || [],
-                        license_number: profileData.license_number || '', // <<< הוספה חדשה
-                        is_verified: profileData.is_verified || 0 // <<< הוספה חדשה
+                        license_number: profileData.license_number || '', 
+                        whatsapp_number: profileData.whatsapp_number || '', // <<< הוספה חדשה
+                        is_verified: profileData.is_verified || 0 
                     });
                     console.log("ProfileEditor: Set states successfully.");
                 }
@@ -138,6 +140,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
 
     // --- Filter specialties ---
     useEffect(() => {
+        // ... (קוד ללא שינוי)
          if (formData.profession_id && allSpecialties?.length > 0) {
              const professionIdNum = parseInt(formData.profession_id, 10);
              setFilteredSpecialties(allSpecialties.filter(spec => spec.profession_id === professionIdNum));
@@ -166,6 +169,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
          setMessage(null); setError(null);
     };
 
+    // ... (שאר המטפלים: specialty, location, availability - ללא שינוי) ...
     const handleSpecialtyToggle = (specialtyId) => {
         setFormData(prev => ({ ...prev, specialties: prev.specialties.includes(specialtyId) ? prev.specialties.filter(id => id !== specialtyId) : [...prev.specialties, specialtyId] }));
         setMessage(null); setError(null);
@@ -192,6 +196,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
     };
 
     // --- Image Cropper Logic ---
+    // ... (קוד ללא שינוי) ...
     const handleImageClick = () => { if (fileInputRef.current) fileInputRef.current.value = null; fileInputRef.current?.click(); };
     const onFileChange = (e) => {
         const file = e.target.files?.[0]; if (!file) return;
@@ -224,13 +229,14 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
         console.log("Data being sent to server:", formData);
         
         try {
-            // <<< הוספה חדשה: פירוק is_verified
+            // --- !!! עדכון: הוצאנו את whatsapp_number מה-payload הכללי ---
             const { profile_image_url, email, availability, is_verified, ...payload } = formData;
             
             payload.profession_id = parseInt(payload.profession_id, 10) || null;
             payload.years_of_practice = parseInt(payload.years_of_practice, 10) || 0;
             payload.specialties = payload.specialties || []; 
-            payload.license_number = formData.license_number || null; // <<< הוספה חדשה
+            payload.license_number = formData.license_number || null; 
+            payload.whatsapp_number = formData.whatsapp_number || null; // <<< הוספה חדשה
             
             payload.locations = (payload.locations || [])
                 .map(loc => ({ city: loc.city?.trim(), region: loc.region })) 
@@ -268,6 +274,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
     };
     
     const handleAvailabilitySubmit = async () => {
+        // ... (קוד ללא שינוי)
         setSavingAvailability(true); setError(null); setMessage(null);
         try {
              const res = await fetch(`${API_URL}/api/professionals/me/availability`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` }, body: JSON.stringify({ availability: formData.availability || {} }) });
@@ -292,7 +299,6 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
             <form onSubmit={handleProfileSubmit} className="bg-white p-6 md:p-8 rounded-lg shadow w-full mx-auto text-right">
                 <h3 className="text-xl font-bold text-text-dark mb-6 border-b pb-3">פרטי פרופיל ומידע מקצועי</h3>
                 
-                {/* <<< הוספה חדשה: הצגת סטטוס אימות >>> */}
                 {formData.is_verified === 1 ? (
                     <div className="mb-6 p-4 bg-green-50 border border-green-300 rounded-lg text-green-800 text-center font-semibold">
                         ✔️ הפרופיל שלך אומת על ידי מנהל.
@@ -318,6 +324,21 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                          <div className="w-full text-center space-y-3 pt-4 border-t border-gray-200">
                              <div> <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider">דוא"ל</label> <p className="text-sm text-gray-700">{formData.email}</p> </div>
                              <div> <label htmlFor="phone_number" className="block text-xs font-medium text-gray-400 uppercase tracking-wider">טלפון</label> <input type="tel" id="phone_number" name="phone_number" value={formData.phone_number || ''} onChange={handleChange} className="mt-1 block w-full px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-primary-blue focus:border-primary-blue text-center" style={{ direction: 'ltr' }}/> </div>
+                             
+                             {/* --- !!! הוספה חדשה: שדה WhatsApp !!! --- */}
+                             <div> 
+                                <label htmlFor="whatsapp_number" className="block text-xs font-medium text-gray-400 uppercase tracking-wider">WhatsApp</label> 
+                                <input 
+                                    type="tel" 
+                                    id="whatsapp_number" 
+                                    name="whatsapp_number" 
+                                    value={formData.whatsapp_number || ''} 
+                                    onChange={handleChange} 
+                                    placeholder="כולל קידומת 972"
+                                    className="mt-1 block w-full px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-primary-blue focus:border-primary-blue text-center" 
+                                    style={{ direction: 'ltr' }}
+                                /> 
+                             </div>
                          </div>
                     </div>
 
@@ -330,7 +351,6 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                              <div> <label htmlFor="profession_id" className="block text-sm font-medium text-gray-700 mb-1">מקצוע</label> <select id="profession_id" name="profession_id" value={formData.profession_id} onChange={handleChange} required className="block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-blue/50 focus:border-primary-blue bg-white appearance-none pr-8 bg-no-repeat bg-right" style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%path stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, backgroundPosition: 'left 0.5rem center', backgroundSize: '1.5em 1.5em' }}> <option value="" disabled>-- בחר מקצוע --</option> {(professions || []).map(p => ( <option key={p.id} value={p.id}>{p.name}</option> ))} </select> </div>
                              <div> <label htmlFor="years_of_practice" className="block text-sm font-medium text-gray-700 mb-1">שנות נסיון</label> <input type="number" id="years_of_practice" name="years_of_practice" value={formData.years_of_practice} onChange={handleChange} min="0" max="60" className="block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-blue/50 focus:border-primary-blue"/> </div>
-                             {/* <<< שדה חדש: מספר רישיון >>> */}
                              <div> 
                                 <label htmlFor="license_number" className="block text-sm font-medium text-gray-700 mb-1">
                                     מספר רישיון
@@ -363,7 +383,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                            ) : ( <p className="text-xs text-gray-500">נא לבחור מקצוע להצגת התמחויות.</p> )}
                         </div>
                         
-                        {/* --- Age Ranges --- */}
+                        {/* Age Ranges */}
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">טווחי גילאים לטיפול</label>
                           <AgeRangeSelector
@@ -376,20 +396,18 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                           />
                         </div>
 
-                        {/* --- LOCATIONS --- */}
+                        {/* LOCATIONS */}
                         <div>
                              <label className="block text-sm font-medium text-gray-700 mb-2">מיקומי קליניקה</label>
                             <div className="space-y-3">
                                 {(formData.locations || []).map((loc, index) => (
                                     <div key={index} className="grid grid-cols-3 items-center gap-2 p-2 border border-gray-200 rounded-md bg-gray-50/70">
-                                         {/* City (col-span-2) */}
                                          <input type="text" placeholder="עיר (אופציונלי לאונליין)" value={loc.city || ''} onChange={(e) => handleLocationChange(index, 'city', e.target.value)} className="col-span-2 px-3 py-1.5 border border-gray-300 rounded-md text-sm shadow-sm"/>
                                          
-                                         {/* Region Dropdown (col-span-1) */}
                                          <select 
                                             value={loc.region || ''} 
                                             onChange={(e) => handleLocationChange(index, 'region', e.target.value)} 
-                                            required // Make region mandatory
+                                            required 
                                             className="col-span-1 px-2 py-1.5 border border-gray-300 rounded-md text-sm shadow-sm bg-white"
                                           >
                                             <option value="" disabled>-- בחר אזור --</option>
@@ -398,14 +416,12 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                                             ))}
                                          </select>
                                          
-                                         {/* Remove button (col-span-3, centered) */}
                                          <button type="button" onClick={() => removeLocation(index)} title="הסר מיקום" className="col-span-3 text-xs text-red-500 hover:text-red-700 hover:underline text-center">הסר מיקום זה</button>
                                     </div>
                                 ))}
                             </div>
                             <button type="button" onClick={addLocation} className="mt-3 text-sm text-primary-blue hover:underline font-medium">+ הוסף מיקום</button>
                         </div>
-                        {/* --- END LOCATIONS --- */}
 
                         {/* Save Button */}
                         <div className="pt-6 border-t border-gray-200 flex justify-start">
@@ -419,6 +435,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
 
             {/* --- AVAILABILITY SECTION --- */}
             <div className="bg-white p-6 md:p-8 rounded-lg shadow w-full mx-auto text-right">
+                {/* ... (קוד ללא שינוי) ... */}
                 <h3 className="text-xl font-bold text-text-dark mb-4">ניהול זמינות שבועית</h3>
                 <p className="text-sm text-gray-500 mb-6">סמן/י את משבצות הזמן הפנויות עבורך.</p>
                 <div className="overflow-x-auto pb-4">
@@ -432,7 +449,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                         <tbody className="bg-white">
                             {defDays.map(day => (
                                 <tr key={day} className="divide-x divide-gray-200">
-                                    <td className="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900 border border-gray-200">{day}</td>
+                                    <td className="px-3 py-3 whitespace-nowDrap text-sm font-medium text-gray-900 border border-gray-200">{day}</td>
                                     {defSlots.map(slot => {
                                         const isSelected = formData.availability && formData.availability[day]?.includes(slot);
                                         return (
