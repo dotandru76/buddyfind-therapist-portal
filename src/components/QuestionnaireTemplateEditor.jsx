@@ -1,9 +1,9 @@
 // src/components/QuestionnaireTemplateEditor.jsx
-// --- גרסה V2.0 (תמיכה בסוגי שאלות) ---
+// --- גרסה V3.0 (תמיכה בעריכה) ---
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
-// (רכיבי עזר פנימיים שהעתקנו מ-AdminDashboard)
+// (רכיבי עזר פנימיים)
 const LoadingSpinner = () => (
     <div className="text-center p-5">
         <div className="spinner w-8 h-8 mx-auto border-t-primary-blue border-r-primary-blue"></div>
@@ -28,23 +28,39 @@ const AlertMessage = ({ type, message, onDismiss }) => {
 
 
 const QuestionnaireTemplateEditor = ({ authToken, API_URL, template, onBack, onSave }) => {
-    const [name, setName] = useState(template?.name || '');
-    const [description, setDescription] = useState(template?.description || '');
-    // --- !!! התיקון כאן: מנסה לפענח JSON אם הוא מגיע כטקסט ---
-    const [questions, setQuestions] = useState(() => {
-        if (!template?.questions_json) return [];
-        if (typeof template.questions_json === 'string') {
-            try {
-                return JSON.parse(template.questions_json);
-            } catch (e) {
-                return [];
-            }
-        }
-        return template.questions_json;
-    });
+    const [name, setName] = useState('');
+    const [description, setDescription] = useState('');
+    const [questions, setQuestions] = useState([]);
     
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
+    
+    // --- !!! תיקון: בודק אם זה מצב עריכה או יצירה ---
+    const isEditMode = Boolean(template && template.id);
+
+    useEffect(() => {
+        if (isEditMode) {
+            setName(template.name || '');
+            setDescription(template.description || '');
+            
+            // --- התיקון כאן: מנסה לפענח JSON אם הוא מגיע כטקסט ---
+            let parsedQuestions = [];
+            if (template.questions_json) {
+                if (typeof template.questions_json === 'string') {
+                    try {
+                        parsedQuestions = JSON.parse(template.questions_json);
+                    } catch (e) {
+                        console.error("Failed to parse questions_json:", e);
+                        parsedQuestions = [];
+                    }
+                } else if (Array.isArray(template.questions_json)) {
+                    parsedQuestions = template.questions_json;
+                }
+            }
+            setQuestions(parsedQuestions);
+        }
+    }, [template, isEditMode]);
+
 
     const handleAddQuestion = () => {
         const newQuestion = {
@@ -86,10 +102,16 @@ const QuestionnaireTemplateEditor = ({ authToken, API_URL, template, onBack, onS
             questions_json: JSON.stringify(questions) // השרת מצפה למחרוזת JSON
         };
         
+        // --- !!! תיקון: לוגיקה לבחירת API ו-Method ---
+        const url = isEditMode 
+            ? `${API_URL}/api/admin/questionnaires/${template.id}` 
+            : `${API_URL}/api/admin/questionnaires`;
+            
+        const method = isEditMode ? 'PUT' : 'POST';
+        
         try {
-            // (בעתיד נוסיף כאן לוגיקת PUT לעריכה)
-            const res = await fetch(`${API_URL}/api/admin/questionnaires`, {
-                method: 'POST',
+            const res = await fetch(url, {
+                method: method,
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${authToken}`
@@ -115,7 +137,7 @@ const QuestionnaireTemplateEditor = ({ authToken, API_URL, template, onBack, onS
         <div className="bg-white p-6 md:p-8 rounded-lg shadow w-full mx-auto text-right">
             <div className="flex justify-between items-center mb-6 border-b pb-3">
                 <h3 className="text-2xl font-bold text-text-dark">
-                    {template ? 'עריכת תבנית שאלון' : 'יצירת תבנית שאלון חדשה'}
+                    {isEditMode ? 'עריכת תבנית שאלון' : 'יצירת תבנית שאלון חדשה'}
                 </h3>
                 <button
                     onClick={onBack}
@@ -171,7 +193,6 @@ const QuestionnaireTemplateEditor = ({ authToken, API_URL, template, onBack, onS
                                     </button>
                                 </div>
                                 
-                                {/* --- !!! התיקון כאן: הוספת בחירת סוג שאלה --- */}
                                 <div className="flex gap-2">
                                     <input
                                         type="text"
@@ -189,7 +210,6 @@ const QuestionnaireTemplateEditor = ({ authToken, API_URL, template, onBack, onS
                                         <option value="rating">דירוג (1-5)</option>
                                     </select>
                                 </div>
-                                {/* (בעתיד נוסיף כאן לוגיקה לבחירת סוג שאלה ואפשרויות) */}
                             </div>
                         ))}
                     </div>
@@ -208,7 +228,7 @@ const QuestionnaireTemplateEditor = ({ authToken, API_URL, template, onBack, onS
                         disabled={saving}
                         className="py-2.5 px-6 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 transition disabled:opacity-50"
                     >
-                        {saving ? <LoadingSpinner /> : 'שמור תבנית'}
+                        {saving ? <LoadingSpinner /> : (isEditMode ? 'עדכן תבנית' : 'שמור תבנית')}
                     </button>
                 </div>
             </div>

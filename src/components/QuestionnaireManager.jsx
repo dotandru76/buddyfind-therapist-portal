@@ -1,9 +1,9 @@
 // src/components/QuestionnaireManager.jsx
-// --- גרסה V2.0 (כולל מעקב שליחה) ---
+// --- גרסה V3.0 (כולל עריכה) ---
 
 import React, { useState, useEffect, useCallback } from 'react';
 import QuestionnaireTemplateEditor from './QuestionnaireTemplateEditor'; 
-import SendQuestionnaireModal from './SendQuestionnaireModal'; // <-- ייבוא המודאל החדש
+import SendQuestionnaireModal from './SendQuestionnaireModal';
 import moment from 'moment';
 
 // (רכיבי עזר פנימיים)
@@ -29,7 +29,6 @@ const AlertMessage = ({ type, message, onDismiss }) => {
     );
 };
 
-// --- רכיב פנימי חדש לטאבים ---
 const TabButton = ({ text, isActive, onClick }) => (
     <button
         onClick={onClick}
@@ -55,14 +54,15 @@ const QuestionnaireManager = ({ authToken, API_URL, onBack }) => {
     const [error, setError] = useState(null);
     
     const [isSendModalOpen, setIsSendModalOpen] = useState(false);
-    const [selectedTemplate, setSelectedTemplate] = useState(null);
+    const [selectedTemplate, setSelectedTemplate] = useState(null); // אובייקט התבנית המלא לעריכה
 
-    // --- טעינת נתונים עבור שתי הלשוניות ---
+    // --- טעינת נתונים ---
     const fetchData = useCallback(async () => {
         setLoading(true); setError(null);
         try {
+            // --- !!! שינוי: טוען עכשיו את כל נתוני התבניות (כולל JSON) ---
             const [templatesRes, sentRes] = await Promise.all([
-                fetch(`${API_URL}/api/admin/questionnaires`, {
+                fetch(`${API_URL}/api/admin/questionnaires?full=true`, { // הוספנו פרמטר
                     headers: { 'Authorization': `Bearer ${authToken}` }
                 }),
                 fetch(`${API_URL}/api/admin/questionnaires/sent`, {
@@ -91,8 +91,10 @@ const QuestionnaireManager = ({ authToken, API_URL, onBack }) => {
         fetchData();
     }, [fetchData]);
 
+    // --- !!! תיקון: פונקציה זו מופעלת כעת ---
     const handleEditTemplate = (template) => {
-        alert("פונקציית עריכה תתווסף בהמשך. כרגע ניתן רק ליצור תבניות חדשות.");
+        setSelectedTemplate(template); // שמור את כל אובייקט התבנית
+        setView('editor');
     };
     
     const handleCreateNewTemplate = () => {
@@ -116,7 +118,7 @@ const QuestionnaireManager = ({ authToken, API_URL, onBack }) => {
             <QuestionnaireTemplateEditor
                 authToken={authToken}
                 API_URL={API_URL}
-                template={selectedTemplate}
+                template={selectedTemplate} // מעביר את התבנית הנבחרת (או null ליצירה)
                 onBack={() => setView('list')}
                 onSave={onSaveTemplateComplete}
             />
@@ -126,19 +128,17 @@ const QuestionnaireManager = ({ authToken, API_URL, onBack }) => {
     // --- הצגת המסך הראשי (עם הטאבים) ---
     return (
         <>
-            {/* --- מודאל שליחה קופץ --- */}
             {isSendModalOpen && (
                 <SendQuestionnaireModal
                     authToken={authToken}
                     API_URL={API_URL}
                     onClose={() => setIsSendModalOpen(false)}
                     onSend={onSendComplete}
-                    templates={templates} // מעביר את התבניות שכבר טענו
+                    templates={templates}
                 />
             )}
         
             <div className="bg-white p-6 md:p-8 rounded-lg shadow w-full mx-auto text-right">
-                {/* --- כותרת וכפתור חזרה --- */}
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="text-2xl font-bold text-text-dark">ניהול שאלונים</h3>
                     <button
@@ -149,7 +149,6 @@ const QuestionnaireManager = ({ authToken, API_URL, onBack }) => {
                     </button>
                 </div>
 
-                {/* --- הטאבים --- */}
                 <div className="flex border-b border-gray-200">
                     <TabButton 
                         text="מעקב שאלונים" 
@@ -168,7 +167,6 @@ const QuestionnaireManager = ({ authToken, API_URL, onBack }) => {
                 
                 {!loading && !error && (
                     <div className="mt-6">
-                        {/* --- תוכן טאב מעקב --- */}
                         {currentTab === 'track' && (
                             <div>
                                 <button
@@ -178,6 +176,7 @@ const QuestionnaireManager = ({ authToken, API_URL, onBack }) => {
                                     + שלח שאלון חדש ללקוח
                                 </button>
                                 <table className="min-w-full divide-y divide-gray-200 text-sm">
+                                    {/* ... (טבלת מעקב - ללא שינוי) ... */}
                                     <thead className="bg-gray-50">
                                         <tr>
                                             <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">סטטוס</th>
@@ -212,7 +211,6 @@ const QuestionnaireManager = ({ authToken, API_URL, onBack }) => {
                             </div>
                         )}
                         
-                        {/* --- תוכן טאב תבניות --- */}
                         {currentTab === 'templates' && (
                             <div>
                                 <button
@@ -222,6 +220,7 @@ const QuestionnaireManager = ({ authToken, API_URL, onBack }) => {
                                     + צור תבנית חדשה
                                 </button>
                                 <table className="min-w-full divide-y divide-gray-200 text-sm">
+                                    {/* ... (טבלת תבניות - ללא שינוי) ... */}
                                     <thead className="bg-gray-50">
                                         <tr>
                                             <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">שם התבנית</th>
