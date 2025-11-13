@@ -1,5 +1,5 @@
 // src/components/ProfileEditor.jsx 
-// --- גרסה V2.1 (נוספו נגישות ותעריף מוזל) ---
+// --- גרסה V2.2 (נוספו הודעות DEBUG) ---
 
 import React, { useState, useEffect, useRef } from 'react';
 import ImageCropper from './ImageCropper';
@@ -26,7 +26,6 @@ const ButtonSpinner = ({ color = 'primary-blue' }) => ( <div className={`spinner
 const LoadingSpinner = () => (
     <div className="text-center p-10"><div className="spinner"></div></div>
 );
-// --- !!! רכיב צ'קבוקס מעוצב !!! ---
 const Checkbox = ({ label, checked, onChange }) => (
     <label className="flex items-center space-x-2 space-x-reverse cursor-pointer">
         <input 
@@ -48,11 +47,10 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
         age_ranges: [],
         license_number: '',
         whatsapp_number: '',
-        is_accessible: false, // <<< הוספה חדשה
-        offers_reduced_fee: false // <<< הוספה חדשה
+        is_accessible: false, 
+        offers_reduced_fee: false 
     });
     
-    // --- State for dynamic definitions ---
     const [professions, setProfessions] = useState([]);
     const [allSpecialties, setAllSpecialties] = useState([]);
     const [filteredSpecialties, setFilteredSpecialties] = useState([]);
@@ -76,7 +74,6 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
         const fetchInitialData = async () => {
             
             if (!user?.id || !authToken) {
-                console.error("ProfileEditor: Fetch aborted - missing professionalId (user.id) or authToken.", { user, authToken });
                 setError("שגיאה בטעינת נתונים: פרטי המשתמש אינם תקינים.");
                 if (isMounted) setLoading(false);
                 return;
@@ -130,8 +127,8 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                         license_number: profileData.license_number || '', 
                         whatsapp_number: profileData.whatsapp_number || '',
                         is_verified: profileData.is_verified || 0,
-                        is_accessible: !!profileData.is_accessible, // <<< הוספה חדשה
-                        offers_reduced_fee: !!profileData.offers_reduced_fee // <<< הוספה חדשה
+                        is_accessible: !!profileData.is_accessible, 
+                        offers_reduced_fee: !!profileData.offers_reduced_fee 
                     });
                 }
             } catch (err) {
@@ -246,8 +243,8 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
             payload.specialties = payload.specialties || []; 
             payload.license_number = formData.license_number || null; 
             payload.whatsapp_number = formData.whatsapp_number || null;
-            payload.is_accessible = formData.is_accessible || false; // <<< הוספה חדשה
-            payload.offers_reduced_fee = formData.offers_reduced_fee || false; // <<< הוספה חדשה
+            payload.is_accessible = formData.is_accessible || false; 
+            payload.offers_reduced_fee = formData.offers_reduced_fee || false; 
             
             payload.locations = (payload.locations || [])
                 .map(loc => ({ city: loc.city?.trim(), region: loc.region })) 
@@ -257,6 +254,10 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                 );
             
             payload.age_ranges = formData.age_ranges || []; 
+
+            // --- !!! [DEBUG 1/3] !!! ---
+            // מדפיסים את הנתונים המדויקים שנשלחים לשרת
+            console.log('--- [DEBUG 1/3] Data being SENT to PUT /api/professionals/me ---', payload);
 
             const res = await fetch(`${API_URL}/api/professionals/me`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` }, body: JSON.stringify(payload) });
             
