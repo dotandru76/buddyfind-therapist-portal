@@ -1,5 +1,5 @@
 // src/components/ProfileEditor.jsx 
-// --- גרסה V2.2 (נוספו הודעות DEBUG) ---
+// --- גרסה V2.3 (תיקון שליחת נתוני צ'קבוקס) ---
 
 import React, { useState, useEffect, useRef } from 'react';
 import ImageCropper from './ImageCropper';
@@ -26,10 +26,11 @@ const ButtonSpinner = ({ color = 'primary-blue' }) => ( <div className={`spinner
 const LoadingSpinner = () => (
     <div className="text-center p-10"><div className="spinner"></div></div>
 );
-const Checkbox = ({ label, checked, onChange }) => (
+const Checkbox = ({ label, checked, onChange, name }) => ( // <-- הוספנו 'name'
     <label className="flex items-center space-x-2 space-x-reverse cursor-pointer">
         <input 
-            type="checkbox" 
+            type="checkbox"
+            name={name} // <-- הוספנו 'name'
             checked={checked}
             onChange={onChange}
             className="h-4 w-4 rounded border-gray-300 text-primary-blue focus:ring-primary-blue"
@@ -155,12 +156,14 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
 
     // --- Handlers ---
     
+    // --- !!! התיקון כאן !!! ---
     const handleChange = (e) => {
          const { name, value, type, checked } = e.target;
          
          setFormData(prev => {
             let newValue;
             if (type === 'checkbox') {
+                // השתמש ב-'checked' עבור צ'קבוקס
                 newValue = checked;
             } else if (type === 'number') {
                 newValue = parseInt(value, 10) || 0;
@@ -179,6 +182,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
          
          setMessage(null); setError(null);
     };
+    // --- סוף התיקון ---
 
     const handleSpecialtyToggle = (specialtyId) => {
         setFormData(prev => ({ ...prev, specialties: prev.specialties.includes(specialtyId) ? prev.specialties.filter(id => id !== specialtyId) : [...prev.specialties, specialtyId] }));
@@ -243,8 +247,10 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
             payload.specialties = payload.specialties || []; 
             payload.license_number = formData.license_number || null; 
             payload.whatsapp_number = formData.whatsapp_number || null;
-            payload.is_accessible = formData.is_accessible || false; 
-            payload.offers_reduced_fee = formData.offers_reduced_fee || false; 
+            
+            // --- !!! התיקון כאן: ודא שאנחנו שולחים את הערך העדכני של הצ'קבוקס ---
+            payload.is_accessible = formData.is_accessible;
+            payload.offers_reduced_fee = formData.offers_reduced_fee;
             
             payload.locations = (payload.locations || [])
                 .map(loc => ({ city: loc.city?.trim(), region: loc.region })) 
@@ -255,8 +261,6 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
             
             payload.age_ranges = formData.age_ranges || []; 
 
-            // --- !!! [DEBUG 1/3] !!! ---
-            // מדפיסים את הנתונים המדויקים שנשלחים לשרת
             console.log('--- [DEBUG 1/3] Data being SENT to PUT /api/professionals/me ---', payload);
 
             const res = await fetch(`${API_URL}/api/professionals/me`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` }, body: JSON.stringify(payload) });
@@ -382,13 +386,15 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-gray-100">
                              <Checkbox
                                 label="הקליניקה נגישה לנכים"
+                                name="is_accessible" // <-- !!! התיקון כאן !!!
                                 checked={formData.is_accessible}
-                                onChange={(e) => handleChange({ target: { name: 'is_accessible', value: e.target.checked, type: 'checkbox' } })}
+                                onChange={handleChange} // <-- !!! התיקון כאן !!!
                              />
                              <Checkbox
                                 label="מציע תעריף מוזל (לסטודנטים/אחר)"
+                                name="offers_reduced_fee" // <-- !!! התיקון כאן !!!
                                 checked={formData.offers_reduced_fee}
-                                onChange={(e) => handleChange({ target: { name: 'offers_reduced_fee', value: e.target.checked, type: 'checkbox' } })}
+                                onChange={handleChange} // <-- !!! התיקון כאן !!!
                              />
                         </div>
                         {/* --- סוף הוספה --- */}
