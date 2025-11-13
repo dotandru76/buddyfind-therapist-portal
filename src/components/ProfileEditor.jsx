@@ -1,5 +1,5 @@
 // src/components/ProfileEditor.jsx 
-// --- גרסה V2.3 (תיקון שליחת נתוני צ'קבוקס) ---
+// --- גרסה V2.1 (נוספו נגישות ותעריף מוזל) ---
 
 import React, { useState, useEffect, useRef } from 'react';
 import ImageCropper from './ImageCropper';
@@ -26,11 +26,12 @@ const ButtonSpinner = ({ color = 'primary-blue' }) => ( <div className={`spinner
 const LoadingSpinner = () => (
     <div className="text-center p-10"><div className="spinner"></div></div>
 );
-const Checkbox = ({ label, checked, onChange, name }) => ( // <-- הוספנו 'name'
+// --- !!! רכיב צ'קבוקס מעוצב !!! ---
+const Checkbox = ({ label, checked, onChange, name }) => (
     <label className="flex items-center space-x-2 space-x-reverse cursor-pointer">
         <input 
             type="checkbox"
-            name={name} // <-- הוספנו 'name'
+            name={name}
             checked={checked}
             onChange={onChange}
             className="h-4 w-4 rounded border-gray-300 text-primary-blue focus:ring-primary-blue"
@@ -48,8 +49,8 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
         age_ranges: [],
         license_number: '',
         whatsapp_number: '',
-        is_accessible: false, 
-        offers_reduced_fee: false 
+        is_accessible: false, // <<< הוספה חדשה
+        offers_reduced_fee: false // <<< הוספה חדשה
     });
     
     const [professions, setProfessions] = useState([]);
@@ -128,8 +129,8 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                         license_number: profileData.license_number || '', 
                         whatsapp_number: profileData.whatsapp_number || '',
                         is_verified: profileData.is_verified || 0,
-                        is_accessible: !!profileData.is_accessible, 
-                        offers_reduced_fee: !!profileData.offers_reduced_fee 
+                        is_accessible: !!profileData.is_accessible, // <<< הוספה חדשה
+                        offers_reduced_fee: !!profileData.offers_reduced_fee // <<< הוספה חדשה
                     });
                 }
             } catch (err) {
@@ -156,14 +157,12 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
 
     // --- Handlers ---
     
-    // --- !!! התיקון כאן !!! ---
     const handleChange = (e) => {
          const { name, value, type, checked } = e.target;
          
          setFormData(prev => {
             let newValue;
             if (type === 'checkbox') {
-                // השתמש ב-'checked' עבור צ'קבוקס
                 newValue = checked;
             } else if (type === 'number') {
                 newValue = parseInt(value, 10) || 0;
@@ -182,7 +181,6 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
          
          setMessage(null); setError(null);
     };
-    // --- סוף התיקון ---
 
     const handleSpecialtyToggle = (specialtyId) => {
         setFormData(prev => ({ ...prev, specialties: prev.specialties.includes(specialtyId) ? prev.specialties.filter(id => id !== specialtyId) : [...prev.specialties, specialtyId] }));
@@ -247,10 +245,8 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
             payload.specialties = payload.specialties || []; 
             payload.license_number = formData.license_number || null; 
             payload.whatsapp_number = formData.whatsapp_number || null;
-            
-            // --- !!! התיקון כאן: ודא שאנחנו שולחים את הערך העדכני של הצ'קבוקס ---
-            payload.is_accessible = formData.is_accessible;
-            payload.offers_reduced_fee = formData.offers_reduced_fee;
+            payload.is_accessible = formData.is_accessible; // <<< הוספה חדשה
+            payload.offers_reduced_fee = formData.offers_reduced_fee; // <<< הוספה חדשה
             
             payload.locations = (payload.locations || [])
                 .map(loc => ({ city: loc.city?.trim(), region: loc.region })) 
@@ -260,8 +256,6 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                 );
             
             payload.age_ranges = formData.age_ranges || []; 
-
-            console.log('--- [DEBUG 1/3] Data being SENT to PUT /api/professionals/me ---', payload);
 
             const res = await fetch(`${API_URL}/api/professionals/me`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` }, body: JSON.stringify(payload) });
             
@@ -386,15 +380,15 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-gray-100">
                              <Checkbox
                                 label="הקליניקה נגישה לנכים"
-                                name="is_accessible" // <-- !!! התיקון כאן !!!
+                                name="is_accessible"
                                 checked={formData.is_accessible}
-                                onChange={handleChange} // <-- !!! התיקון כאן !!!
+                                onChange={handleChange}
                              />
                              <Checkbox
                                 label="מציע תעריף מוזל (לסטודנטים/אחר)"
-                                name="offers_reduced_fee" // <-- !!! התיקון כאן !!!
+                                name="offers_reduced_fee"
                                 checked={formData.offers_reduced_fee}
-                                onChange={handleChange} // <-- !!! התיקון כאן !!!
+                                onChange={handleChange}
                              />
                         </div>
                         {/* --- סוף הוספה --- */}
