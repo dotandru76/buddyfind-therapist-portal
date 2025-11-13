@@ -1,4 +1,5 @@
 // src/components/ProfileEditor.jsx 
+// --- גרסה V2.1 (נוספו נגישות ותעריף מוזל) ---
 
 import React, { useState, useEffect, useRef } from 'react';
 import ImageCropper from './ImageCropper';
@@ -7,7 +8,6 @@ import AgeRangeSelector from './AgeRangeSelector.jsx';
 
 // --- Helper Components ---
 const AlertMessage = ({ type, message, onDismiss }) => {
-    // ... (קוד ללא שינוי)
     if (!message) return null;
     const baseClasses = "px-4 py-3 rounded relative mb-6 text-right";
     const typeClasses = type === 'success' ? "bg-green-100 border-green-400 text-green-700" : "bg-red-100 border-red-400 text-red-700";
@@ -26,6 +26,18 @@ const ButtonSpinner = ({ color = 'primary-blue' }) => ( <div className={`spinner
 const LoadingSpinner = () => (
     <div className="text-center p-10"><div className="spinner"></div></div>
 );
+// --- !!! רכיב צ'קבוקס מעוצב !!! ---
+const Checkbox = ({ label, checked, onChange }) => (
+    <label className="flex items-center space-x-2 space-x-reverse cursor-pointer">
+        <input 
+            type="checkbox" 
+            checked={checked}
+            onChange={onChange}
+            className="h-4 w-4 rounded border-gray-300 text-primary-blue focus:ring-primary-blue"
+        />
+        <span className="text-sm font-medium text-gray-700">{label}</span>
+    </label>
+);
 
 // --- Main Component ---
 const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) => {
@@ -35,7 +47,9 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
         specialties: [], locations: [], availability: {}, 
         age_ranges: [],
         license_number: '',
-        whatsapp_number: '' // <<< הוספה חדשה
+        whatsapp_number: '',
+        is_accessible: false, // <<< הוספה חדשה
+        offers_reduced_fee: false // <<< הוספה חדשה
     });
     
     // --- State for dynamic definitions ---
@@ -69,7 +83,6 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
             }
 
             if (isMounted) setLoading(true); setError(null); setMessage(null);
-            console.log("ProfileEditor: Fetching profile and options...");
 
             try {
                 const fetchOptions = { headers: { 'Authorization': `Bearer ${authToken}` } };
@@ -115,8 +128,10 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                         availability: availability || {}, 
                         age_ranges: profileData.age_ranges || [],
                         license_number: profileData.license_number || '', 
-                        whatsapp_number: profileData.whatsapp_number || '', // <<< הוספה חדשה
-                        is_verified: profileData.is_verified || 0 
+                        whatsapp_number: profileData.whatsapp_number || '',
+                        is_verified: profileData.is_verified || 0,
+                        is_accessible: !!profileData.is_accessible, // <<< הוספה חדשה
+                        offers_reduced_fee: !!profileData.offers_reduced_fee // <<< הוספה חדשה
                     });
                 }
             } catch (err) {
@@ -144,10 +159,18 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
     // --- Handlers ---
     
     const handleChange = (e) => {
-         const { name, value, type } = e.target;
+         const { name, value, type, checked } = e.target;
          
          setFormData(prev => {
-            const newValue = type === 'number' ? parseInt(value, 10) || 0 : value;
+            let newValue;
+            if (type === 'checkbox') {
+                newValue = checked;
+            } else if (type === 'number') {
+                newValue = parseInt(value, 10) || 0;
+            } else {
+                newValue = value;
+            }
+
             const newState = { ...prev, [name]: newValue };
             
             if (name === 'profession_id') {
@@ -223,6 +246,8 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
             payload.specialties = payload.specialties || []; 
             payload.license_number = formData.license_number || null; 
             payload.whatsapp_number = formData.whatsapp_number || null;
+            payload.is_accessible = formData.is_accessible || false; // <<< הוספה חדשה
+            payload.offers_reduced_fee = formData.offers_reduced_fee || false; // <<< הוספה חדשה
             
             payload.locations = (payload.locations || [])
                 .map(loc => ({ city: loc.city?.trim(), region: loc.region })) 
@@ -308,7 +333,6 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                              <div> <label htmlFor="email" className="block text-xs font-medium text-gray-400 uppercase tracking-wider">דוא"ל</label> <p className="text-sm text-gray-700">{formData.email}</p> </div>
                              <div> <label htmlFor="phone_number" className="block text-xs font-medium text-gray-400 uppercase tracking-wider">טלפון</label> <input type="tel" id="phone_number" name="phone_number" value={formData.phone_number || ''} onChange={handleChange} className="mt-1 block w-full px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-primary-blue focus:border-primary-blue text-center" style={{ direction: 'ltr' }}/> </div>
                              
-                             {/* --- !!! הוספה חדשה: שדה WhatsApp !!! --- */}
                              <div> 
                                 <label htmlFor="whatsapp_number" className="block text-xs font-medium text-gray-400 uppercase tracking-wider">WhatsApp</label> 
                                 <input 
@@ -353,6 +377,21 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                             </div>
                         </div>
                         
+                        {/* --- !!! הוספה חדשה: צ'קבוקסים !!! --- */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-gray-100">
+                             <Checkbox
+                                label="הקליניקה נגישה לנכים"
+                                checked={formData.is_accessible}
+                                onChange={(e) => handleChange({ target: { name: 'is_accessible', value: e.target.checked, type: 'checkbox' } })}
+                             />
+                             <Checkbox
+                                label="מציע תעריף מוזל (לסטודנטים/אחר)"
+                                checked={formData.offers_reduced_fee}
+                                onChange={(e) => handleChange({ target: { name: 'offers_reduced_fee', value: e.target.checked, type: 'checkbox' } })}
+                             />
+                        </div>
+                        {/* --- סוף הוספה --- */}
+
                         {/* Bio */}
                         <div> <label htmlFor="bio" className="block text-sm font-medium text-gray-700 mb-1">קצת עלי / גישה טיפולית</label> <textarea id="bio" name="bio" value={formData.bio || ''} onChange={handleChange} rows="4" placeholder="..." className="block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-blue/50 focus:border-primary-blue resize-none"/> </div>
                         {/* Specialties */}
