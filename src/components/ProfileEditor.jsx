@@ -75,8 +75,6 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                 const fetchOptions = { headers: { 'Authorization': `Bearer ${authToken}` } };
                 
                 const optionsRes = await fetch(`${API_URL}/api/data/options`, fetchOptions);
-                console.log(`ProfileEditor: Statuses - Options: ${optionsRes.status}`);
-
                 if (!isMounted) return;
 
                 if (optionsRes.status === 401 || optionsRes.status === 403) {
@@ -87,7 +85,6 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
 
                 const profileData = user; 
                 const optionsData = await optionsRes.json();
-                console.log("ProfileEditor: Fetched data successfully.");
 
                 if (isMounted) {
                     setProfessions(optionsData.professions || []);
@@ -121,26 +118,20 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                         whatsapp_number: profileData.whatsapp_number || '', // <<< הוספה חדשה
                         is_verified: profileData.is_verified || 0 
                     });
-                    console.log("ProfileEditor: Set states successfully.");
                 }
             } catch (err) {
-                console.error('ProfileEditor: Initial fetch CATCH block:', err);
-                if (err.responseStatus) { console.error('Initial fetch Response Status:', err.responseStatus); console.error('Initial fetch Response Body:', err.responseBody); }
                  if (isMounted) setError(`שגיאה בטעינת נתונים: ${err.message}`);
             } finally {
-                console.log("ProfileEditor: --- FINALLY BLOCK ---");
-                if (isMounted) { console.log("ProfileEditor: Setting loading = false"); setLoading(false); }
-                else { console.log("ProfileEditor: Component unmounted, not setting state."); }
+                if (isMounted) { setLoading(false); }
             }
         };
         fetchInitialData();
-        return () => { isMounted = false; console.log("ProfileEditor: Cleanup effect."); };
+        return () => { isMounted = false; };
     }, [authToken, API_URL, user, onLogout]); 
 
 
     // --- Filter specialties ---
     useEffect(() => {
-        // ... (קוד ללא שינוי)
          if (formData.profession_id && allSpecialties?.length > 0) {
              const professionIdNum = parseInt(formData.profession_id, 10);
              setFilteredSpecialties(allSpecialties.filter(spec => spec.profession_id === professionIdNum));
@@ -169,7 +160,6 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
          setMessage(null); setError(null);
     };
 
-    // ... (שאר המטפלים: specialty, location, availability - ללא שינוי) ...
     const handleSpecialtyToggle = (specialtyId) => {
         setFormData(prev => ({ ...prev, specialties: prev.specialties.includes(specialtyId) ? prev.specialties.filter(id => id !== specialtyId) : [...prev.specialties, specialtyId] }));
         setMessage(null); setError(null);
@@ -196,7 +186,6 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
     };
 
     // --- Image Cropper Logic ---
-    // ... (קוד ללא שינוי) ...
     const handleImageClick = () => { if (fileInputRef.current) fileInputRef.current.value = null; fileInputRef.current?.click(); };
     const onFileChange = (e) => {
         const file = e.target.files?.[0]; if (!file) return;
@@ -226,17 +215,14 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
     const handleProfileSubmit = async (e) => {
         e.preventDefault(); setSavingProfile(true); setError(null); setMessage(null);
         
-        console.log("Data being sent to server:", formData);
-        
         try {
-            // --- !!! עדכון: הוצאנו את whatsapp_number מה-payload הכללי ---
             const { profile_image_url, email, availability, is_verified, ...payload } = formData;
             
             payload.profession_id = parseInt(payload.profession_id, 10) || null;
             payload.years_of_practice = parseInt(payload.years_of_practice, 10) || 0;
             payload.specialties = payload.specialties || []; 
             payload.license_number = formData.license_number || null; 
-            payload.whatsapp_number = formData.whatsapp_number || null; // <<< הוספה חדשה
+            payload.whatsapp_number = formData.whatsapp_number || null;
             
             payload.locations = (payload.locations || [])
                 .map(loc => ({ city: loc.city?.trim(), region: loc.region })) 
@@ -246,8 +232,6 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                 );
             
             payload.age_ranges = formData.age_ranges || []; 
-
-            console.log("CLEAN Payload being sent:", payload);
 
             const res = await fetch(`${API_URL}/api/professionals/me`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` }, body: JSON.stringify(payload) });
             
@@ -264,7 +248,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
             }
             
             setMessage('✅ פרטי הפרופיל עודכנו!'); 
-            if(onUpdateSuccess) onUpdateSuccess(); // קריאה לפונקציה שמרעננת את App
+            if(onUpdateSuccess) onUpdateSuccess(); 
             
         } catch (err) { 
             console.error('Profile Update error:', err); 
@@ -274,7 +258,6 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
     };
     
     const handleAvailabilitySubmit = async () => {
-        // ... (קוד ללא שינוי)
         setSavingAvailability(true); setError(null); setMessage(null);
         try {
              const res = await fetch(`${API_URL}/api/professionals/me/availability`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` }, body: JSON.stringify({ availability: formData.availability || {} }) });
@@ -322,7 +305,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                          </div>
                          <input type="file" ref={fileInputRef} onChange={onFileChange} accept="image/png, image/jpeg, image/jpg" className="hidden"/>
                          <div className="w-full text-center space-y-3 pt-4 border-t border-gray-200">
-                             <div> <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider">דוא"ל</label> <p className="text-sm text-gray-700">{formData.email}</p> </div>
+                             <div> <label htmlFor="email" className="block text-xs font-medium text-gray-400 uppercase tracking-wider">דוא"ל</label> <p className="text-sm text-gray-700">{formData.email}</p> </div>
                              <div> <label htmlFor="phone_number" className="block text-xs font-medium text-gray-400 uppercase tracking-wider">טלפון</label> <input type="tel" id="phone_number" name="phone_number" value={formData.phone_number || ''} onChange={handleChange} className="mt-1 block w-full px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-primary-blue focus:border-primary-blue text-center" style={{ direction: 'ltr' }}/> </div>
                              
                              {/* --- !!! הוספה חדשה: שדה WhatsApp !!! --- */}
@@ -334,10 +317,13 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                                     name="whatsapp_number" 
                                     value={formData.whatsapp_number || ''} 
                                     onChange={handleChange} 
-                                    placeholder="כולל קידומת 972"
+                                    placeholder="972XXXXXXXX"
                                     className="mt-1 block w-full px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-primary-blue focus:border-primary-blue text-center" 
                                     style={{ direction: 'ltr' }}
                                 /> 
+                                <p className="text-xs text-gray-500 mt-1 text-center">
+                                    חובה להתחיל עם הקידומת הבינלאומית (972) כדי שהקישור יעבוד.
+                                </p>
                              </div>
                          </div>
                     </div>
@@ -435,7 +421,6 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
 
             {/* --- AVAILABILITY SECTION --- */}
             <div className="bg-white p-6 md:p-8 rounded-lg shadow w-full mx-auto text-right">
-                {/* ... (קוד ללא שינוי) ... */}
                 <h3 className="text-xl font-bold text-text-dark mb-4">ניהול זמינות שבועית</h3>
                 <p className="text-sm text-gray-500 mb-6">סמן/י את משבצות הזמן הפנויות עבורך.</p>
                 <div className="overflow-x-auto pb-4">
@@ -449,7 +434,7 @@ const ProfileEditor = ({ authToken, API_URL, user, onUpdateSuccess, onLogout }) 
                         <tbody className="bg-white">
                             {defDays.map(day => (
                                 <tr key={day} className="divide-x divide-gray-200">
-                                    <td className="px-3 py-3 whitespace-nowDrap text-sm font-medium text-gray-900 border border-gray-200">{day}</td>
+                                    <td className="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900 border border-gray-200">{day}</td>
                                     {defSlots.map(slot => {
                                         const isSelected = formData.availability && formData.availability[day]?.includes(slot);
                                         return (
