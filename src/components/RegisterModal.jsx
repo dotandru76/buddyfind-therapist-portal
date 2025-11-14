@@ -1,27 +1,39 @@
 // src/components/RegisterModal.jsx
 import React, { useState } from 'react';
 
-const RegisterModal = ({ handleRegister, loading, onLoginClick }) => {
+const RegisterModal = ({ handleRegister, loading, onLoginClick, authError }) => { // הוספנו קבלת שגיאה
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-    const [fullName, setFullName] = useState(''); // Essential for professional registration
+    const [fullName, setFullName] = useState(''); 
     const [formError, setFormError] = useState(null);
+    const [shake, setShake] = useState(false);
 
     const handleSubmit = (e) => {
         e.preventDefault();
         setFormError(null);
+        setShake(true); // הפעל אנימציה בכל לחיצה לבדיקה
 
         if (!fullName.trim()) { setFormError('יש למלא שם מלא.'); return; }
         if (password !== confirmPassword) { setFormError('הסיסמאות אינן תואמות.'); return; }
         if (password.length < 6) { setFormError('הסיסמה חייבת להכיל לפחות 6 תווים.'); return; }
 
+        setShake(false); // בטל אנימציה אם הכל תקין
         handleRegister({ email, password, full_name: fullName });
     };
+    
+    React.useEffect(() => {
+        if (authError) { // הפעל אנימציה גם בשגיאות שרת
+            setShake(true);
+        }
+    }, [authError]);
 
     return (
         <div className="flex flex-col items-center justify-center min-h-[calc(100vh-150px)] p-4">
-            <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-2xl">
+            <div 
+                className={`w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-2xl ${shake ? 'shake-error' : ''}`}
+                onAnimationEnd={() => setShake(false)} // איפוס אנימציה
+            >
                 <h2 className="text-2xl font-bold text-center text-text-dark">יצירת חשבון מטפל חדש</h2>
                 <p className="text-center text-sm text-text-light">מלאו את הפרטים להרשמה.</p>
 
@@ -60,8 +72,7 @@ const RegisterModal = ({ handleRegister, loading, onLoginClick }) => {
                     </div>
 
                     {formError && <p className="text-red-600 text-sm text-center p-2 bg-red-50 rounded">{formError}</p>}
-                    {/* Error from props (e.g., API errors) will be shown by App.jsx */}
-
+                    
                     <button type="submit" disabled={loading} className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-blue hover:bg-secondary-purple focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-blue disabled:opacity-50 disabled:cursor-not-allowed">
                         {loading ? <div className="spinner w-5 h-5 border-t-white border-r-white border-b-white border-l-primary-blue"></div> : 'הרשמה'}
                     </button>

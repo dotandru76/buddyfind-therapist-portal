@@ -1,5 +1,5 @@
 // src/components/LogContactForm.jsx
-// --- רכיב חדש לדיווח על תחילת טיפול ---
+// --- גרסה V1.1 (נוסף אפקט רעד) ---
 
 import React, { useState } from 'react';
 
@@ -27,15 +27,19 @@ const LogContactForm = ({ authToken, API_URL, user }) => {
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState(null);
     const [error, setError] = useState(null);
+    const [shake, setShake] = useState(false); // <-- מצב לאנימציה
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setError(null); setMessage(null);
+        
         if (!anonymousId.trim()) {
             setError('יש להזין את קוד הזיהוי האנונימי של המטופל.');
+            setShake(true); // <-- הפעל אנימציה
             return;
         }
         
-        setLoading(true); setError(null); setMessage(null);
+        setLoading(true);
         
         try {
             const res = await fetch(`${API_URL}/api/professionals/me/log-contact`, {
@@ -50,7 +54,7 @@ const LogContactForm = ({ authToken, API_URL, user }) => {
             const data = await res.json();
             
             if (!res.ok) {
-                // שגיאות 404/409/400 מהשרת מוחזרות כ-error
+                setShake(true); // <-- הפעל אנימציה גם בשגיאת שרת
                 throw new Error(data.error || 'שגיאה כללית בדיווח.');
             }
             
@@ -65,7 +69,10 @@ const LogContactForm = ({ authToken, API_URL, user }) => {
     };
 
     return (
-        <div className="bg-white p-6 md:p-8 rounded-lg shadow w-full max-w-xl mx-auto text-right mb-8">
+        <div 
+            className={`bg-white p-6 md:p-8 rounded-lg shadow w-full max-w-xl mx-auto text-right mb-8 ${shake ? 'shake-error' : ''}`}
+            onAnimationEnd={() => setShake(false)} // <-- איפוס אנימציה
+        >
             <h3 className="text-xl font-bold text-text-dark mb-4 border-b pb-3">דיווח על תחילת טיפול</h3>
             <p className="text-sm text-gray-600 mb-6">
                 נא להזין את הקוד האנונימי שקיבלת מהמטופל. לאחר 60 יום, המערכת תשלח לו שאלון חוות דעת אוטומטי.

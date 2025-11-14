@@ -1,22 +1,33 @@
 // src/components/LoginModal.jsx
 import React, { useState } from 'react';
 
-const LoginModal = ({ handleLogin, loading, onRegisterClick }) => {
+const LoginModal = ({ handleLogin, loading, onRegisterClick, authError }) => { // הוספנו קבלת שגיאה
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [shake, setShake] = useState(false);
 
     const handleSubmit = (e) => {
         e.preventDefault();
         if (!email || !password) {
-            alert('Please enter both email and password.'); // Simple validation
-            return;
+            setShake(true); // הפעל אנימציית רעד
+            return; // onLogin יטפל בהצגת השגיאה
         }
         handleLogin({ email, password });
     };
 
+    // הפעל אנימציית רעד בכל פעם שמתקבלת שגיאה מבחוץ
+    React.useEffect(() => {
+        if (authError) {
+            setShake(true);
+        }
+    }, [authError]);
+
     return (
         <div className="flex flex-col items-center justify-center min-h-[calc(100vh-150px)] p-4">
-            <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-2xl">
+            <div 
+                className={`w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-2xl ${shake ? 'shake-error' : ''}`}
+                onAnimationEnd={() => setShake(false)} // איפוס האנימציה בסיום
+            >
                 <h2 className="text-2xl font-bold text-center text-text-dark">התחברות לפורטל המטפלים</h2>
                 <p className="text-center text-sm text-text-light">הזן את פרטי ההתחברות שלך.</p>
 
