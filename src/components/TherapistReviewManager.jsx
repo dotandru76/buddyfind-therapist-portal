@@ -1,9 +1,9 @@
 // src/components/TherapistReviewManager.jsx
-// --- רכיב חדש המחליף את PendingReviews ---
+// --- גרסה V2.1 (טיפול שגיאות משופר) ---
 
 import React, { useState, useEffect, useCallback } from 'react';
 import moment from 'moment';
-import ViewAnswersModal from './ViewAnswersModal'; // נייבא את המודאל החדש
+import ViewAnswersModal from './ViewAnswersModal'; 
 
 // (רכיבי עזר פנימיים)
 const LoadingSpinner = () => (
@@ -32,7 +32,7 @@ const TherapistReviewManager = ({ authToken, API_URL, onLogout }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [message, setMessage] = useState(null);
-    const [selectedReview, setSelectedReview] = useState(null); // לפתיחת המודאל
+    const [selectedReview, setSelectedReview] = useState(null); 
 
     const fetchReviews = useCallback(async () => {
         setLoading(true); setError(null);
@@ -40,15 +40,31 @@ const TherapistReviewManager = ({ authToken, API_URL, onLogout }) => {
             const res = await fetch(`${API_URL}/api/professionals/me/questionnaires`, {
                 headers: { 'Authorization': `Bearer ${authToken}` },
             });
+            
             if (res.status === 401 || res.status === 403) {
                 onLogout(); 
                 return;
             }
-            if (!res.ok) throw new Error('שגיאה באחזור חוות דעת');
+            
+            // --- !!! תיקון: טיפול שגיאות משופר !!! ---
+            if (!res.ok) {
+                let errorMsg = `שגיאה ${res.status}`;
+                try {
+                    const data = await res.json();
+                    errorMsg = data.error || errorMsg;
+                } catch(e) {
+                    // אין גוף JSON, השתמש בטקסט הסטטוס
+                    errorMsg = `${errorMsg}: ${res.statusText}`;
+                }
+                throw new Error(errorMsg);
+            }
+            // --- סוף התיקון ---
+
             const data = await res.json();
             setReviews(data);
         } catch (err) {
-            setError(err.message);
+            console.error("Error fetching reviews:", err);
+            setError(err.message || 'שגיאה לא ידועה באחזור חוות דעת');
         } finally {
             setLoading(false);
         }
@@ -59,9 +75,9 @@ const TherapistReviewManager = ({ authToken, API_URL, onLogout }) => {
     }, [fetchReviews]);
 
     const handleActionComplete = (successMessage) => {
-        setSelectedReview(null); // סגור את המודאל
-        setMessage(successMessage); // הצג הודעת הצלחה
-        fetchReviews(); // טען מחדש את הרשימה
+        setSelectedReview(null); 
+        setMessage(successMessage); 
+        fetchReviews(); 
     };
 
     return (
@@ -84,11 +100,11 @@ const TherapistReviewManager = ({ authToken, API_URL, onLogout }) => {
 
                 {loading && <LoadingSpinner />}
                 
-                {!loading && reviews.length === 0 && (
+                {!loading && !error && reviews.length === 0 && (
                     <p className="text-gray-500 text-center py-4">אין חוות דעת הממתינות לאישור.</p>
                 )}
 
-                {!loading && reviews.length > 0 && (
+                {!loading && !error && reviews.length > 0 && (
                      <div className="overflow-x-auto mt-4">
                         <table className="min-w-full divide-y divide-gray-200 text-sm">
                             <thead className="bg-gray-50">
