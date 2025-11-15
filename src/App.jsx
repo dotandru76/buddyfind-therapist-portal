@@ -1,4 +1,4 @@
-// src/App.jsx (של buddyfind-therapist-portal) - SECURED
+// src/App.jsx (של buddyfind-therapist-portal) - SECURED & FIXED IMPORTS
 import React, { useState, useEffect, useCallback } from 'react';
 import LoginModal from './components/LoginModal';
 import RegisterModal from './components/RegisterModal';
@@ -6,10 +6,11 @@ import ProfileEditor from './components/ProfileEditor';
 import TherapistReviewManager from './components/TherapistReviewManager';
 import AdminDashboard from './components/AdminDashboard';
 import LogContactForm from './components/LogContactForm';
-import LoadingSpinner from './components/LoadingSpinner'; // ודא שהקובץ קיים
+import LoadingSpinner from './components/LoadingSpinner'; // <-- !!! הוספתי את השורה הזו !!!
+import AlertMessage from './components/AlertMessage';   // <-- !!! והוספתי את השורה הזו !!!
 
 const API_URL = 'https://buddyfind-api.onrender.com';
-const LOGO_URL = 'https://res.cloudinary.com/dermarx8t/image/upload/v1761900572/WellMatch_logo_ktdyfy.png';
+const LOGO_URL = 'https://res-console.cloudinary.com/dermarx8t/image/upload/v1761900572/WellMatch_logo_ktdyfy.png'; // (הערה: הקישור הקודם היה נכון יותר, אבל אשאיר את זה אם שינית)
 
 const App = () => {
     // --- !!! ניהול אימות חדש !!! ---
@@ -25,7 +26,7 @@ const App = () => {
         try {
             await fetch(`${API_URL}/api/logout`, { 
                 method: 'POST',
-                credentials: 'include' // <-- !!! שלח עוגיות למחיקה !!!
+                credentials: 'include' 
             });
         } catch (err) {
             console.error("Logout failed:", err);
@@ -43,11 +44,11 @@ const App = () => {
         setLoading(true); setAuthError(null);
         try {
             const res = await fetch(`${API_URL}/api/professionals/me`, {
-                credentials: 'include' // <-- !!! התיקון: שימוש בעוגיות !!!
+                credentials: 'include' 
             });
             if (!res.ok) {
                 if (res.status === 401 || res.status === 403) {
-                    throw new Error('לא מחובר'); // שגיאה צפויה אם אין עוגייה
+                    throw new Error('לא מחובר'); 
                 }
                 const data = await res.json();
                 throw new Error(data.error || 'שגיאה בטעינת פרופיל');
@@ -82,7 +83,7 @@ const App = () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(credentials),
-                credentials: 'include' // <-- !!! התיקון: קבלת עוגיית התחברות !!!
+                credentials: 'include' 
             });
             const data = await res.json();
             if (!res.ok) {
@@ -96,7 +97,6 @@ const App = () => {
                 if (data.user_type !== 'professional' && data.user_type !== 'admin') {
                     throw new Error('גישה מורשית למטפלים ומנהלים בלבד.');
                 }
-                // במקום לשמור טוקן, פשוט נטען את הפרופיל (מה שיאמת את הסשן)
                 await fetchUserProfile();
             }
         } catch (err) {
@@ -108,7 +108,45 @@ const App = () => {
 
     // --- ניווט פנימי (ללא שינוי) ---
     const renderNav = () => {
-        // ... (הקוד המקורי שלך ל-renderNav נשאר זהה) ...
+        if (!user) return null;
+        const isAdmin = user.user_type === 'admin';
+        const hasProfile = user.id !== null; 
+
+        return (
+            <nav className="flex justify-center gap-6 mb-8 border-b border-gray-200">
+                {isAdmin && (
+                    <button 
+                        onClick={() => setNav('admin')}
+                        className={`py-4 px-2 text-sm font-semibold ${nav === 'admin' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        לוח בקרה (Admin)
+                    </button>
+                )}
+                
+                {hasProfile && (
+                    <>
+                        <button 
+                            onClick={() => setNav('profile')}
+                            className={`py-4 px-2 text-sm font-semibold ${nav === 'profile' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            עריכת פרופיל
+                        </button>
+                        <button 
+                            onClick={() => setNav('reviews')}
+                            className={`py-4 px-2 text-sm font-semibold ${nav === 'reviews' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            ניהול חוות דעת
+                        </button>
+                        <button 
+                            onClick={() => setNav('log_contact')}
+                            className={`py-4 px-2 text-sm font-semibold ${nav === 'log_contact' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            דיווח תחילת טיפול
+                        </button>
+                    </>
+                )}
+            </nav>
+        );
     };
 
     // --- הצגת תוכן ---
@@ -149,7 +187,7 @@ const App = () => {
                     <ProfileEditor 
                         API_URL={API_URL} 
                         user={user}
-                        onUpdateSuccess={() => fetchUserProfile()} // טען מחדש פרופיל אחרי עדכון
+                        onUpdateSuccess={() => fetchUserProfile()} 
                         onLogout={handleLogout}
                     />
                 )}
@@ -165,7 +203,6 @@ const App = () => {
                     <LogContactForm 
                         API_URL={API_URL} 
                         user={user}
-                        // העבר onLogout אם צריך לטפל ב-401
                         onLogout={handleLogout} 
                     />
                 )}
@@ -186,7 +223,7 @@ const App = () => {
             <header className="bg-white shadow-sm">
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-20">
                     <img src={LOGO_URL} alt="WellMatch Logo" className="h-12" />
-                    {user && ( // <-- שונה לבדיקת משתמש
+                    {user && ( 
                         <button 
                             onClick={handleLogout}
                             className="text-sm font-medium text-gray-500 hover:text-red-600"
