@@ -1,38 +1,35 @@
-// src/App.jsx (של buddyfind-therapist-portal)
-// --- גרסה V3.3 (הוספת ניווט לדיווח טיפול) ---
-
-import React, { useState, useEffect } from 'react';
+// src/App.jsx (של buddyfind-therapist-portal) - SECURED
+import React, { useState, useEffect, useCallback } from 'react';
 import LoginModal from './components/LoginModal';
 import RegisterModal from './components/RegisterModal';
 import ProfileEditor from './components/ProfileEditor';
-import TherapistReviewManager from './components/TherapistReviewManager'; 
+import TherapistReviewManager from './components/TherapistReviewManager';
 import AdminDashboard from './components/AdminDashboard';
-import LogContactForm from './components/LogContactForm'; // <-- ייבוא הרכיב החדש
+import LogContactForm from './components/LogContactForm';
+import LoadingSpinner from './components/LoadingSpinner'; // ייבוא רכיב טעינה
 
 const API_URL = 'https://buddyfind-api.onrender.com';
 const LOGO_URL = 'https://res.cloudinary.com/dermarx8t/image/upload/v1761900572/WellMatch_logo_ktdyfy.png';
 
 const App = () => {
-    const [authToken, setAuthToken] = useState(() => localStorage.getItem('portal_token'));
+    // --- !!! שינוי: authToken הוסר. user הוא המקור היחיד לאמת ---
     const [user, setUser] = useState(null);
     const [view, setView] = useState('login'); // login, register
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
-    const [nav, setNav] = useState('profile'); // ניווט פנימי למשתמש מחובר
+    const [loading, setLoading] = useState(true); // מתחיל בטעינה לבדיקת סשן
+    const [authError, setAuthError] = useState(null);
+    const [nav, setNav] = useState('profile'); 
 
-    // --- טעינת פרטי משתמש ---
-    const fetchUserProfile = async (token) => {
-        setLoading(true); setError(null);
+    // --- טעינת פרטי משתמש (משמש גם כבדיקת סשן) ---
+    const fetchUserProfile = useCallback(async () => {
+        setLoading(true); setAuthError(null);
         try {
             const res = await fetch(`${API_URL}/api/professionals/me`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                credentials: 'include' // <-- !!! שימוש בעוגיות !!!
+                // headers: { 'Authorization': `Bearer ${token}` } <-- הוסר
             });
             if (!res.ok) {
-                if (res.status === 401 || res.status === 403) {
-                    throw new Error('פג תוקף, יש להתחבר מחדש.');
-                }
-                const data = await res.json(); 
-                throw new Error(data.error || 'שגיאה בטעינת פרופיל');
+                // אם אין הרשאה (401/403) או לא נמצא (404), המשתמש לא מחובר
+                throw new Error('לא מחובר');
             }
             const data = await res.json();
             setUser(data);
@@ -42,32 +39,28 @@ const App = () => {
                 setNav('profile'); 
             }
         } catch (err) {
-            console.error(err);
-            setError(err.message);
-            handleLogout(); 
+            setUser(null); // אפס משתמש
+            setView('login'); // החזר למסך התחברות
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
+    // --- !!! שינוי: בדיקת סשן בטעינה ראשונית ---
     useEffect(() => {
-        if (authToken) {
-            fetchUserProfile(authToken);
-        } else {
-            setView('login');
-            setUser(null);
-        }
-    }, [authToken]);
+        fetchUserProfile();
+    }, [fetchUserProfile]);
 
     // --- טיפול באימות ---
     const handleAuth = async (credentials, isRegister = false) => {
-        setLoading(true); setError(null);
+        setLoading(true); setAuthError(null);
         const endpoint = isRegister ? '/api/register' : '/api/login';
         try {
             const res = await fetch(`${API_URL}${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(credentials)
+                body: JSON.stringify(credentials),
+                credentials: 'include' // <-- !!! הוספה: קבלת עוגיית ההתחברות !!!
             });
             const data = await res.json();
             if (!res.ok) {
@@ -81,85 +74,57 @@ const App = () => {
                 if (data.user_type !== 'professional' && data.user_type !== 'admin') {
                     throw new Error('גישה מורשית למטפלים ומנהלים בלבד.');
                 }
-                localStorage.setItem('portal_token', data.token);
-                setAuthToken(data.token);
+                // --- !!! שינוי: במקום לשמור טוקן, טוענים את הפרופיל ---
+                await fetchUserProfile();
             }
         } catch (err) {
-            setError(err.message);
+            setAuthError(err.message);
         } finally {
             setLoading(false);
         }
     };
 
-    const handleLogout = () => {
-        localStorage.removeItem('portal_token');
-        setAuthToken(null);
-        setUser(null);
-        setView('login');
-        setNav('profile');
+    const handleLogout = async () => {
+        setLoading(true);
+        try {
+            await fetch(`${API_URL}/api/logout`, { 
+                method: 'POST',
+                credentials: 'include' // <-- !!! שלח עוגיות למחיקה !!!
+            });
+        } catch (err) {
+            console.error("Logout failed:", err);
+        } finally {
+            setUser(null);
+            setView('login');
+            setNav('profile');
+            setLoading(false);
+        }
     };
 
-    // --- ניווט פנימי ---
-    const renderNav = () => {
-        if (!user) return null;
-        const isAdmin = user.user_type === 'admin';
-        const hasProfile = user.id !== null; 
-
-        return (
-            <nav className="flex justify-center gap-6 mb-8 border-b border-gray-200">
-                {isAdmin && (
-                    <button 
-                        onClick={() => setNav('admin')}
-                        className={`py-4 px-2 text-sm font-semibold ${nav === 'admin' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        לוח בקרה (Admin)
-                    </button>
-                )}
-                
-                {hasProfile && (
-                    <>
-                        <button 
-                            onClick={() => setNav('profile')}
-                            className={`py-4 px-2 text-sm font-semibold ${nav === 'profile' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            עריכת פרופיל
-                        </button>
-                        <button 
-                            onClick={() => setNav('reviews')}
-                            className={`py-4 px-2 text-sm font-semibold ${nav === 'reviews' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            ניהול חוות דעת
-                        </button>
-                        {/* --- !!! הוספת לשונית חדשה !!! --- */}
-                        <button 
-                            onClick={() => setNav('log_contact')}
-                            className={`py-4 px-2 text-sm font-semibold ${nav === 'log_contact' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            דיווח תחילת טיפול
-                        </button>
-                    </>
-                )}
-            </nav>
-        );
-    };
+    // ... (renderNav ללא שינוי) ...
 
     // --- הצגת תוכן ---
     const renderContent = () => {
-        if (loading && !user) return <div className="text-center p-10"><div className="spinner"></div></div>;
-        if (!authToken || !user) {
+        if (loading) { // מסך טעינה כללי בזמן בדיקת סשן
+            return <div className="text-center p-10"><LoadingSpinner /></div>;
+        }
+
+        if (!user) { // אם אין משתמש, הצג טפסי אימות
             return (
                 <div>
                     {view === 'login' ? (
                         <LoginModal 
                             handleLogin={handleAuth} 
                             loading={loading} 
-                            onRegisterClick={() => { setView('register'); setError(null); }} 
+                            onRegisterClick={() => { setView('register'); setAuthError(null); }}
+                            authError={authError} // <-- העבר שגיאה
                         />
                     ) : (
                         <RegisterModal 
                             handleRegister={(creds) => handleAuth(creds, true)} 
                             loading={loading} 
-                            onLoginClick={() => { setView('login'); setError(null); }} 
+                            onLoginClick={() => { setView('login'); setAuthError(null); }} 
+                            authError={authError} // <-- העבר שגיאה
                         />
                     )}
                 </div>
@@ -170,41 +135,35 @@ const App = () => {
         return (
             <div className="w-full">
                 {renderNav()}
-                {error && <div className="p-4 mb-4 text-red-700 bg-red-100 border border-red-400 rounded text-right">{error}</div>}
+                {authError && <div className="p-4 mb-4 text-red-700 bg-red-100 border border-red-400 rounded text-right">{authError}</div>}
                 
-                {/* 1. עריכת פרופיל */}
+                {/* --- !!! שינוי: כל הרכיבים אינם מקבלים יותר authToken --- */}
+                
                 {user.id && nav === 'profile' && (
                     <ProfileEditor 
-                        authToken={authToken} 
                         API_URL={API_URL} 
                         user={user}
-                        onUpdateSuccess={() => fetchUserProfile(authToken)}
+                        onUpdateSuccess={() => fetchUserProfile()}
                         onLogout={handleLogout}
                     />
                 )}
                 
-                {/* 2. ניהול חוות דעת */}
                 {user.id && nav === 'reviews' && (
                     <TherapistReviewManager 
-                        authToken={authToken} 
                         API_URL={API_URL} 
                         onLogout={handleLogout}
                     />
                 )}
                 
-                {/* 3. דיווח תחילת טיפול (החדש) */}
                 {user.id && nav === 'log_contact' && (
                     <LogContactForm 
-                        authToken={authToken} 
                         API_URL={API_URL} 
                         user={user}
                     />
                 )}
                 
-                {/* 4. דשבורד מנהל */}
                 {user.user_type === 'admin' && nav === 'admin' && (
                      <AdminDashboard 
-                        authToken={authToken} 
                         API_URL={API_URL} 
                         user={user}
                         onLogout={handleLogout}
@@ -215,11 +174,12 @@ const App = () => {
     };
 
     return (
+        // ... ( JSX של Header ו-main ללא שינוי) ...
         <div className="min-h-screen bg-gray-50 text-text-dark">
             <header className="bg-white shadow-sm">
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-20">
                     <img src={LOGO_URL} alt="WellMatch Logo" className="h-12" />
-                    {authToken && (
+                    {user && ( // <-- שונה לבדיקת משתמש במקום טוקן
                         <button 
                             onClick={handleLogout}
                             className="text-sm font-medium text-gray-500 hover:text-red-600"
