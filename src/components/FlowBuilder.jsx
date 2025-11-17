@@ -1,4 +1,4 @@
-// src/components/FlowBuilder.jsx - v7 (FIXED CSS IMPORT)
+// src/components/FlowBuilder.jsx - v7 (Editable Multi-Handle Nodes)
 import React, { useState, useCallback, useEffect } from 'react';
 import ReactFlow, {
   Controls,
@@ -8,9 +8,7 @@ import ReactFlow, {
   addEdge,
   MarkerType,
 } from 'reactflow';
-
-// --- !!! התיקון הקריטי כאן: ייבוא ישיר של ה-CSS !!! ---
-import 'reactflow/dist/style.css';
+import 'reactflow/dist/style.css'; // ייבוא ה-CSS
 
 import { questionsTree } from '../constants/questionsTree';
 import QuestionNode from './QuestionNode.jsx';
@@ -23,7 +21,7 @@ const nodeTypes = {
 // מיקום ברירת מחדל לתצוגה
 const defaultViewport = { x: 0, y: 0, zoom: 1 };
 
-// פונקציית המרה
+// פונקציית המרה משודרגת
 const convertTreeToFlow = (tree, onNodeDataChange) => {
   const nodes = [];
   const edges = [];
@@ -38,50 +36,100 @@ const convertTreeToFlow = (tree, onNodeDataChange) => {
     region: { x: 1050, y: 200 },
   };
 
+  // יצירת רשימות התשובות (יציאות)
+  const outputs = {
+    start: ['אם נפש (2)', 'אחר'],
+    targetEntity: ['טיפול יחידני', 'זוגיות', 'משפחה', 'קבוצה'],
+    audience: ['המשך'],
+    profession: ['רגיל', 'דילוג (4,5,6)'],
+    symptoms: ['המשך'],
+    preferences: ['המשך'],
+    region: ['סיום'], // אין המשך
+  };
+  
+  // (התאמה קטנה של התשובות למה שהיה ב-questionsTree)
+  outputs.targetEntity = tree.targetEntity.options.map(opt => opt.label);
+
   for (const [nodeId, nodeData] of Object.entries(tree)) {
     nodes.push({
       id: nodeId,
       data: { 
         label: nodeData.text,
+        outputs: outputs[nodeId] || ['המשך'], // העבר את רשימת התשובות
         onNodeDataChange: onNodeDataChange,
         id: nodeId 
       }, 
       position: positions[nodeId] || { x: 100, y: 100 + nodes.length * 50 },
-      type: (nodeId === 'start') ? 'input' : 'questionNode',
+      type: (nodeId === 'start') ? 'questionNode' : 'questionNode', // הפכנו הכל לסוג החדש
     });
   }
 
-  // יצירת החיצים (Edges)
+  // יצירת החיצים (Edges) - עכשיו עם חיבור לידיות ספציפיות
   edges.push({
-    id: 'start-to-targetEntity', source: 'start', target: 'targetEntity', label: "אם 'נפש' (2)",
+    id: 'start-to-targetEntity', 
+    source: 'start', 
+    sourceHandle: 'אם נפש (2)', // <-- התחבר ליציאה "אם נפש"
+    target: 'targetEntity', 
     markerEnd: { type: MarkerType.ArrowClosed },
   });
   edges.push({
-    id: 'start-to-audience', source: 'start', target: 'audience', label: 'אחר',
+    id: 'start-to-audience', 
+    source: 'start', 
+    sourceHandle: 'אחר', // <-- התחבר ליציאה "אחר"
+    target: 'audience', 
     markerEnd: { type: MarkerType.ArrowClosed },
   });
   edges.push({
-    id: 'targetEntity-to-audience', source: 'targetEntity', target: 'audience',
+    id: 'targetEntity-to-audience', 
+    source: 'targetEntity', 
+    sourceHandle: outputs.targetEntity[0], // מתחבר מהיציאה הראשונה (כולם מובילים לאותו מקום)
+    target: 'audience', 
+    markerEnd: { type: MarkerType.ArrowClosed },
+  });
+  // (דוגמה לחיבור כל היציאות מאותו סוג)
+  outputs.targetEntity.slice(1).forEach(label => {
+      edges.push({
+        id: `targetEntity-${label}-to-audience`,
+        source: 'targetEntity',
+        sourceHandle: label,
+        target: 'audience',
+        markerEnd: { type: MarkerType.ArrowClosed },
+      });
+  });
+
+  edges.push({
+    id: 'audience-to-profession', 
+    source: 'audience', 
+    sourceHandle: 'המשך',
+    target: 'profession',
     markerEnd: { type: MarkerType.ArrowClosed },
   });
   edges.push({
-    id: 'audience-to-profession', source: 'audience', target: 'profession',
+    id: 'profession-to-symptoms', 
+    source: 'profession', 
+    sourceHandle: 'רגיל',
+    target: 'symptoms', 
     markerEnd: { type: MarkerType.ArrowClosed },
   });
   edges.push({
-    id: 'profession-to-symptoms', source: 'profession', target: 'symptoms', label: 'רגיל',
+    id: 'profession-to-preferences', 
+    source: 'profession', 
+    sourceHandle: 'דילוג (4,5,6)',
+    target: 'preferences', 
     markerEnd: { type: MarkerType.ArrowClosed },
   });
   edges.push({
-    id: 'profession-to-preferences', source: 'profession', target: 'preferences', label: 'דילוג (4,5,6)',
+    id: 'symptoms-to-preferences', 
+    source: 'symptoms', 
+    sourceHandle: 'המשך',
+    target: 'preferences',
     markerEnd: { type: MarkerType.ArrowClosed },
   });
   edges.push({
-    id: 'symptoms-to-preferences', source: 'symptoms', target: 'preferences',
-    markerEnd: { type: MarkerType.ArrowClosed },
-  });
-  edges.push({
-    id: 'preferences-to-region', source: 'preferences', target: 'region',
+    id: 'preferences-to-region', 
+    source: 'preferences', 
+    sourceHandle: 'המשך',
+    target: 'region',
     markerEnd: { type: MarkerType.ArrowClosed },
   });
 
@@ -95,10 +143,29 @@ function FlowBuilder() {
   const [edges, setEdges] = useState([]);
   const [nodeId, setNodeId] = useState(1); 
 
+  // --- !!! פונקציית העדכון המשודרגת !!! ---
   const onNodeDataChange = useCallback((id, newData) => {
     setNodes((nds) =>
       nds.map((node) => {
         if (node.id === id) {
+          // אם שינינו את רשימת היציאות, צריך לעדכן גם את החיצים
+          if (newData.outputs) {
+              const oldOutputs = node.data.outputs || [];
+              const newOutputs = newData.outputs;
+              
+              // עדכון חיצים קיימים אם שם התשובה השתנה
+              setEdges((eds) => eds.map(edge => {
+                  if (edge.source === id) {
+                      const oldHandleIndex = oldOutputs.indexOf(edge.sourceHandle);
+                      if (oldHandleIndex !== -1 && newOutputs[oldHandleIndex]) {
+                          // שם הידית השתנה, עדכן את החץ
+                          return { ...edge, sourceHandle: newOutputs[oldHandleIndex] };
+                      }
+                  }
+                  return edge;
+              }));
+          }
+
           return {
             ...node,
             data: {
@@ -110,8 +177,9 @@ function FlowBuilder() {
         return node;
       })
     );
-  }, [setNodes]);
+  }, [setNodes, setEdges]);
   
+  // טעינה ראשונית
   useEffect(() => {
     const { initialNodes, initialEdges } = convertTreeToFlow(questionsTree, onNodeDataChange);
     setNodes(initialNodes);
@@ -119,6 +187,7 @@ function FlowBuilder() {
     setNodeId(initialNodes.length + 1);
   }, [onNodeDataChange]); 
 
+  // פונקציות בסיסיות של React Flow (גרירה, מחיקה)
   const onNodesChange = useCallback(
     (changes) => setNodes((nds) => applyNodeChanges(changes, nds)),
     [setNodes]
@@ -128,11 +197,13 @@ function FlowBuilder() {
     [setEdges]
   );
   
+  // פונקציה לחיבור בין מלבנים
   const onConnect = useCallback(
     (connection) => {
+      // עכשיו החץ מגיע מידית ספציפית (תשובה)
       const newEdge = { 
         ...connection, 
-        labelText: prompt('מה התנאי למעבר? (למשל: "תשובה=כן")'),
+        labelText: `מ-'${connection.sourceHandle}'`,
         markerEnd: { type: MarkerType.ArrowClosed }
       };
       setEdges((eds) => addEdge(newEdge, eds))
@@ -140,12 +211,14 @@ function FlowBuilder() {
     [setEdges]
   );
 
+  // הוספת מלבן שאלה חדש
   const addNode = () => {
     const newId = `new_${nodeId}`;
     const newNode = {
       id: newId,
       data: { 
         label: `שאלה חדשה ${nodeId}`,
+        outputs: ['תשובה 1'], // הוספנו תשובה ראשונית
         onNodeDataChange: onNodeDataChange,
         id: newId
       },
@@ -156,10 +229,18 @@ function FlowBuilder() {
     setNodeId(nodeId + 1);
   };
   
+  // שמירה (עדיין מדפיס ל-Console)
   const onSave = () => {
+    // בלוגיקת השמירה, אנו מנקים את הפונקציה onNodeDataChange
+    // כדי לא לשמור אותה ב-JSON
+    const cleanNodes = nodes.map(n => {
+        const { onNodeDataChange, ...cleanData } = n.data;
+        return { ...n, data: cleanData };
+    });
+    
     const flowData = {
-      nodes: nodes.map(n => ({ id: n.id, data: n.data, position: n.position, type: n.type })),
-      edges: edges.map(e => ({ id: e.id, source: e.source, target: e.target, labelText: e.labelText })),
+      nodes: cleanNodes,
+      edges: edges.map(e => ({ id: e.id, source: e.source, sourceHandle: e.sourceHandle, target: e.target, labelText: e.labelText })),
     };
     console.log('[DEBUG] שמירת תרשים:', JSON.stringify(flowData, null, 2));
     alert('מבנה התרשים נשמר (בדוק ב-Console)');
