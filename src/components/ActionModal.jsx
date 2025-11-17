@@ -3,9 +3,23 @@ import React, { useState, useEffect, useMemo } from 'react';
 import moment from 'moment';
 import AdminResolveReviewModal from './AdminResolveReviewModal'; 
 
-// ... (רכיבי עזר פנימיים - LoadingSpinner, AlertMessage, ActionButton - ללא שינוי) ...
+// (רכיבי עזר פנימיים)
 const LoadingSpinner = () => ( <div className="text-center p-5"><div className="spinner w-8 h-8 mx-auto border-t-primary-blue border-r-primary-blue"></div></div> );
-const AlertMessage = ({ type, message, onDismiss }) => { /* ... (כמו בקובץ המקורי) ... */ };
+const AlertMessage = ({ type, message, onDismiss }) => {
+    if (!message) return null;
+    const baseClasses = "px-4 py-3 rounded relative mb-4 text-right";
+    const typeClasses = type === 'success' ? "bg-green-100 border-green-400 text-green-700" : "bg-red-100 border-red-400 text-red-700";
+    return (
+        <div className={`${baseClasses} ${typeClasses}`} role="alert">
+            <span className="block sm:inline">{message}</span>
+            {onDismiss && (
+                <span className="absolute top-0 bottom-0 left-0 px-4 py-3 cursor-pointer" onClick={onDismiss}>
+                    <svg className="fill-current h-6 w-6 text-red-500" role="button" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><title>Close</title><path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z"/></svg>
+                </span>
+            )}
+        </div>
+    );
+};
 const ActionButton = ({ onClick, text, color, isLoading, ...props }) => ( <button onClick={onClick} disabled={isLoading} className={`px-3 py-1 text-xs font-medium text-white rounded-md transition ${ color === 'green' ? 'bg-green-500 hover:bg-green-600' : color === 'red' ? 'bg-red-500 hover:bg-red-600' : color === 'blue' ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-500 hover:bg-gray-600' } disabled:opacity-50`} {...props} > {isLoading ? '...' : text} </button> );
 
 // --- !!! התיקון: הסרת authToken והוספת onLogout ---
@@ -17,7 +31,34 @@ const ActionModal = ({ modalType, API_URL, onClose, onActionComplete, onLogout }
     const [viewingReview, setViewingReview] = useState(null); 
 
     const config = useMemo(() => {
-        // ... (לוגיקת config ללא שינוי) ...
+        switch (modalType) {
+            case 'reviews':
+                return {
+                    title: 'ניהול חוות דעת ממתינות (מערכת ישנה)',
+                    endpoint: `${API_URL}/api/admin/reviews/pending-admin`,
+                    headers: ['תאריך', 'קוד לקוח', 'ביקורת', 'פעולות'],
+                };
+            case 'disputed':
+                return {
+                    title: 'טיפול בערעורים (מערכת שאלונים)',
+                    endpoint: `${API_URL}/api/admin/questionnaires/disputed`,
+                    headers: ['מטפל מערער', 'לקוח', 'שם שאלון', 'פעולות'],
+                };
+            case 'professionals':
+                return {
+                    title: 'ניהול מטפלים',
+                    endpoint: `${API_URL}/api/admin/users/professionals`,
+                    headers: ['שם', 'מקצוע', 'מספר רישיון', 'סטטוס', 'פעולות'],
+                };
+            case 'users':
+                return {
+                    title: 'רשימת משתמשים (כללי)',
+                    endpoint: `${API_URL}/api/admin/users/all`,
+                    headers: ['אימייל', 'סוג', 'קוד אנונימי', 'נרשם ב-'],
+                };
+            default:
+                return null;
+        }
     }, [modalType, API_URL]);
 
     // טעינת נתונים
@@ -28,18 +69,21 @@ const ActionModal = ({ modalType, API_URL, onClose, onActionComplete, onLogout }
         // --- !!! התיקון: שימוש בעוגיות ---
         fetch(config.endpoint, { credentials: 'include' })
             .then(res => {
-                if (res.status === 401 || res.status === 403) { onLogout(); return; }
+                if (res.status === 401 || res.status === 403) { onLogout(); throw new Error('Unauthorized'); }
                 if (res.status === 404) { throw new Error('הנתיב לא נמצא (404).'); }
                 if (!res.ok) throw new Error('שגיאה בטעינת הנתונים.');
                 return res.json();
             })
             .then(setData)
-            .catch(err => setError(err.message))
+            .catch(err => {
+                if (err.message !== 'Unauthorized') {
+                    setError(err.message);
+                }
+            })
             .finally(() => setLoading(false));
-    // --- !!! התיקון: עדכון תלויות ---
-    }, [config, onLogout]);
+    }, [config, onLogout]); // <-- עדכון תלויות
 
-    // --- פונקציות לביצוע פעולות (דורשות גם הן תיקון) ---
+    // --- פונקציות לביצוע פעולות ---
     
     const handleReviewAction = async (reviewId, newStatus) => {
         // ... (יישם כאן תיקון דומה עם credentials: 'include')
@@ -91,10 +135,92 @@ const ActionModal = ({ modalType, API_URL, onClose, onActionComplete, onLogout }
         onActionComplete(); 
     };
 
-    // ... (פונקציית renderRow ללא שינוי, היא תקינה) ...
-    // ... (העתק את פונקציית renderRow המקורית שלך לכאן) ...
+    // --- פונקציית עזר לרנדור טבלה ---
+    const renderRow = (item) => {
+        switch (modalType) {
+            case 'disputed':
+                return (
+                    <tr key={item.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 whitespace-nowrap">{item.professional_name}</td>
+                        <td className="px-4 py-3 whitespace-nowrap">{item.client_email}</td>
+                        <td className="px-4 py-3 whitespace-nowrap">{item.questionnaire_name}</td>
+                        <td className="px-4 py-3 whitespace-nowrap space-x-2 space-x-reverse">
+                            <ActionButton
+                                text="פתח לטיפול"
+                                color="blue"
+                                isLoading={actionLoading === item.id}
+                                onClick={() => setViewingReview(item)}
+                            />
+                        </td>
+                    </tr>
+                );
+            case 'reviews':
+                return (
+                    <tr key={item.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 whitespace-nowrap">{new Date(item.created_at).toLocaleDateString('he-IL')}</td>
+                        <td className="px-4 py-3 whitespace-nowrap font-mono">{item.client_anon_id}</td>
+                        <td className="px-4 py-3">
+                            <span className="font-bold">({item.rating}/5)</span> {item.review_text}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap space-x-2 space-x-reverse">
+                            <ActionButton text="אשר (למטפל)" color="green" /* ... */ />
+                            <ActionButton text="דחה" color="red" /* ... */ />
+                        </td>
+                    </tr>
+                );
+            case 'professionals': {
+                const newStatusText = item.active_status === 'active' ? 'השעה' : 'הפעל';
+                const newStatusColor = item.active_status === 'active' ? 'red' : 'green';
+                const licenseNum = item.license_number || '';
+                let professionPathId = '1'; 
+                if (licenseNum && licenseNum.includes('-')) {
+                    professionPathId = licenseNum.split('-')[0];
+                }
+                const licenseCheckUrl = `https://practitioners.health.gov.il/Practitioners/${professionPathId}/search?name=${encodeURIComponent(item.full_name)}&license=${encodeURIComponent(licenseNum)}&certificate=`;
+                
+                return (
+                    <tr key={item.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 whitespace-nowrap font-semibold">{item.full_name}</td>
+                        <td className="px-4 py-3 whitespace-nowrap">{item.profession}</td>
+                        <td className="px-4 py-3 whitespace-nowrap font-mono">
+                            {item.license_number ? (
+                                <a href={licenseCheckUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 hover:underline" title="לחץ לבדיקה במשרד הבריאות">
+                                    {item.license_number} 🔗
+                                </a>
+                            ) : (<span className="text-gray-400">לא הוזן</span>)}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${item.active_status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                                {item.active_status === 'active' ? 'פעיל' : 'מושעה'}
+                            </span>
+                            {item.is_verified === 1 && (<span className="ml-2 px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">מאומת</span>)}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap space-x-2 space-x-reverse">
+                            <ActionButton text={newStatusText} color={newStatusColor} isLoading={actionLoading === item.id} onClick={() => handleProfessionalAction(item.id, item.active_status)} />
+                            {item.is_verified === 0 ? (
+                                <ActionButton text="אשר וי" color="blue" isLoading={actionLoading === `${item.id}-verify`} onClick={() => handleVerifyAction(item.id, 1)} />
+                            ) : (
+                                <ActionButton text="בטל וי" color="gray" isLoading={actionLoading === `${item.id}-verify`} onClick={() => handleVerifyAction(item.id, 0)} />
+                            )}
+                        </td>
+                    </tr>
+                );
+            } 
+            case 'users': 
+                 return (
+                    <tr key={item.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 whitespace-nowrap">{item.email}</td>
+                        <td className="px-4 py-3 whitespace-nowrap">{item.user_type}</td>
+                        <td className="px-4 py-3 whitespace-nowrap font-mono">{item.anonymous_id}</td>
+                        <td className="px-4 py-3 whitespace-nowrap">{new Date(item.created_at).toLocaleDateString('he-IL')}</td>
+                    </tr>
+                );
+            default: return null;
+        }
+    };
     
-    // --- !!! התיקון: החזרת ה-JSX המקורי ---
+    if (!config) return null;
+
     return (
         <>
             {viewingReview && (
@@ -103,7 +229,7 @@ const ActionModal = ({ modalType, API_URL, onClose, onActionComplete, onLogout }
                     review={viewingReview}
                     onClose={() => setViewingReview(null)}
                     onActionComplete={handleResolveComplete}
-                    onLogout={onLogout} // העברה למודאל הפנימי
+                    onLogout={onLogout}
                 />
             )}
         
@@ -128,12 +254,9 @@ const ActionModal = ({ modalType, API_URL, onClose, onActionComplete, onLogout }
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
-                                    {/* {data.length > 0 ? data.map(renderRow) : (
+                                    {data.length > 0 ? data.map(renderRow) : (
                                         <tr><td colSpan={config.headers.length} className="p-5 text-center text-gray-500">אין נתונים להצגה.</td></tr>
-                                    )} */}
-                                    {/* !!! החזר את הפונקציה renderRow שלך לכאן !!! */}
-                                    {/* (לא הייתה לי גישה לקוד המלא שלה בתשובה הקודמת, אז השארתי אותה ריקה) */}
-                                    {/* סביר להניח שהיא נמצאת בקובץ המקורי שלך (ActionModal.jsx) */}
+                                    )}
                                 </tbody>
                             </table>
                         </div>
