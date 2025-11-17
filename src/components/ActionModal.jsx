@@ -1,7 +1,8 @@
-// src/components/ActionModal.jsx - SECURED
+// src/components/ActionModal.jsx - SECURED (Fixed .jsx import)
 import React, { useState, useEffect, useMemo } from 'react';
 import moment from 'moment';
-import AdminResolveReviewModal from './AdminResolveReviewModal'; 
+// --- !!! התיקון: הוספת סיומת .jsx לייבוא !!! ---
+import AdminResolveReviewModal from './AdminResolveReviewModal.jsx'; 
 
 // (רכיבי עזר פנימיים)
 const LoadingSpinner = () => ( <div className="text-center p-5"><div className="spinner w-8 h-8 mx-auto border-t-primary-blue border-r-primary-blue"></div></div> );
@@ -22,7 +23,6 @@ const AlertMessage = ({ type, message, onDismiss }) => {
 };
 const ActionButton = ({ onClick, text, color, isLoading, ...props }) => ( <button onClick={onClick} disabled={isLoading} className={`px-3 py-1 text-xs font-medium text-white rounded-md transition ${ color === 'green' ? 'bg-green-500 hover:bg-green-600' : color === 'red' ? 'bg-red-500 hover:bg-red-600' : color === 'blue' ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-500 hover:bg-gray-600' } disabled:opacity-50`} {...props} > {isLoading ? '...' : text} </button> );
 
-// --- !!! התיקון: הסרת authToken והוספת onLogout ---
 const ActionModal = ({ modalType, API_URL, onClose, onActionComplete, onLogout }) => {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -66,7 +66,6 @@ const ActionModal = ({ modalType, API_URL, onClose, onActionComplete, onLogout }
         if (!config) return;
         setLoading(true); setError(null);
         
-        // --- !!! התיקון: שימוש בעוגיות ---
         fetch(config.endpoint, { credentials: 'include' })
             .then(res => {
                 if (res.status === 401 || res.status === 403) { onLogout(); throw new Error('Unauthorized'); }
@@ -81,19 +80,32 @@ const ActionModal = ({ modalType, API_URL, onClose, onActionComplete, onLogout }
                 }
             })
             .finally(() => setLoading(false));
-    }, [config, onLogout]); // <-- עדכון תלויות
+    }, [config, onLogout]); 
 
     // --- פונקציות לביצוע פעולות ---
     
     const handleReviewAction = async (reviewId, newStatus) => {
-        // ... (יישם כאן תיקון דומה עם credentials: 'include')
+        // (שים לב: לוגיקה זו שייכת למערכת הישנה, ודא שהיא נכונה)
+        setActionLoading(reviewId);
+        try {
+            const res = await fetch(`${API_URL}/api/admin/reviews/${reviewId}/status`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ newStatus: newStatus }),
+                credentials: 'include'
+            });
+            if (res.status === 401 || res.status === 403) { onLogout(); return; }
+            if (!res.ok) throw new Error('הפעולה נכשלה.');
+            setData(prevData => prevData.filter(item => item.id !== reviewId));
+            onActionComplete();
+        } catch (err) { setError(err.message); }
+        finally { setActionLoading(null); }
     };
 
     const handleProfessionalAction = async (profId, currentStatus) => {
         setActionLoading(profId);
         const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
         try {
-            // --- !!! התיקון: שימוש בעוגיות ---
             const res = await fetch(`${API_URL}/api/admin/professionals/${profId}/status`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -112,7 +124,6 @@ const ActionModal = ({ modalType, API_URL, onClose, onActionComplete, onLogout }
     const handleVerifyAction = async (profId, newVerifyStatus) => {
         setActionLoading(`${profId}-verify`);
         try {
-            // --- !!! התיקון: שימוש בעוגיות ---
             const res = await fetch(`${API_URL}/api/admin/professionals/${profId}/verify`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -163,8 +174,18 @@ const ActionModal = ({ modalType, API_URL, onClose, onActionComplete, onLogout }
                             <span className="font-bold">({item.rating}/5)</span> {item.review_text}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap space-x-2 space-x-reverse">
-                            <ActionButton text="אשר (למטפל)" color="green" /* ... */ />
-                            <ActionButton text="דחה" color="red" /* ... */ />
+                            <ActionButton
+                                text="אשר (למטפל)"
+                                color="green"
+                                isLoading={actionLoading === item.id}
+                                onClick={() => handleReviewAction(item.id, 'pending_therapist')}
+                            />
+                            <ActionButton
+                                text="דחה"
+                                color="red"
+                                isLoading={actionLoading === item.id}
+                                onClick={() => handleReviewAction(item.id, 'rejected')}
+                            />
                         </td>
                     </tr>
                 );
