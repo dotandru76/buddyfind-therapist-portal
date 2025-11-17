@@ -1,8 +1,8 @@
-// src/components/QuestionNode.jsx - (v4 - Inspector-Ready)
+// src/components/QuestionNode.jsx - (v5 - Show Outputs)
 import React from 'react';
 import { Handle, Position } from 'reactflow';
 
-// עיצוב הידית
+// עיצוב הידית (הנקודה האפורה)
 const handleStyle = {
     background: '#fff',
     border: '1px solid #777',
@@ -38,13 +38,15 @@ const nodeBodyStyle = {
 
 // רכיב התשובה (יציאה)
 const OutputHandle = ({ label, id }) => (
-  <div style={{ position: 'relative', padding: '5px 0', paddingRight: '15px' }}>
-    <span style={{ fontSize: '11px' }}>{label}</span>
+  <div style={{ position: 'relative', padding: '5px 0', paddingRight: '15px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+    {/* --- !!! התיקון: מציגים את הטקסט של התשובה --- */}
+    <span style={{ fontSize: '11px', color: '#333' }}>{label}</span>
+    
     <Handle 
       type="source" 
       position={Position.Right} 
       id={id} // המזהה של הידית
-      style={{ ...handleStyle, right: '-6px', top: '50%' }}
+      style={{ ...handleStyle, right: '-6px', position: 'absolute', top: '50%' }}
     />
   </div>
 );
@@ -52,7 +54,6 @@ const OutputHandle = ({ label, id }) => (
 // הרכיב המותאם אישית
 function QuestionNode({ data, selected }) {
   
-  // הוספת מסגרת כחולה אם המלבן נבחר
   const customNodeStyle = {
     ...nodeStyle,
     border: selected ? '2px solid #2563EB' : nodeStyle.border,
@@ -77,8 +78,8 @@ function QuestionNode({ data, selected }) {
         {(data.outputs || []).map((output, index) => (
           <OutputHandle 
             key={index} 
-            label={output.label} 
-            id={output.id} 
+            label={output.label} // <-- מעבירים את הטקסט
+            id={output.id} // <-- מעבירים את המזהה
           />
         ))}
       </div>
