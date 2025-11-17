@@ -1,35 +1,46 @@
-// src/components/RegistrationsGraph.jsx
-// --- רכיב גרף חדש ---
-
+// src/components/RegistrationsGraph.jsx - SECURED
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import moment from 'moment';
 
-const RegistrationsGraph = ({ authToken, API_URL }) => {
+// --- !!! התיקון: הסרת authToken והוספת onLogout ---
+const RegistrationsGraph = ({ API_URL, onLogout }) => {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     useEffect(() => {
         setLoading(true); setError(null);
+        
+        // --- !!! התיקון: שימוש בעוגיות ---
         fetch(`${API_URL}/api/admin/stats/registrations-chart`, { 
-            headers: { 'Authorization': `Bearer ${authToken}` } 
+            credentials: 'include'
+            // headers: { 'Authorization': `Bearer ${authToken}` } <-- הוסר
         })
         .then(res => {
+            // --- !!! התיקון: טיפול ב-401 ---
+            if (res.status === 401 || res.status === 403) {
+                if (onLogout) onLogout();
+                throw new Error('Unauthorized');
+            }
             if (!res.ok) throw new Error('שגיאה בטעינת נתוני הגרף.');
             return res.json();
         })
         .then(apiData => {
-            // עיבוד הנתונים לפורמט שהגרף דורש
             const processedData = apiData.map(item => ({
                 date: moment(item.date).format('DD/MM'),
                 count: item.count
             }));
             setData(processedData);
         })
-        .catch(err => setError(err.message))
+        .catch(err => {
+            if (err.message !== 'Unauthorized') {
+                setError(err.message);
+            }
+        })
         .finally(() => setLoading(false));
-    }, [authToken, API_URL]);
+    // --- !!! התיקון: עדכון תלויות ---
+    }, [API_URL, onLogout]);
 
     if (loading) {
         return <div className="text-center p-10 text-sm text-gray-500">טוען נתוני גרף...</div>;
@@ -46,9 +57,7 @@ const RegistrationsGraph = ({ authToken, API_URL }) => {
             <ResponsiveContainer>
                 <LineChart
                     data={data}
-                    margin={{
-                        top: 5, right: 30, left: 0, bottom: 5,
-                    }}
+                    margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
                 >
                     <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
                     <XAxis dataKey="date" />
