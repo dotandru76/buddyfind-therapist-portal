@@ -1,5 +1,5 @@
-// src/components/FlowBuilder.jsx - v6 (Fixed useEffect import)
-import React, { useState, useCallback, useEffect } from 'react'; // <-- !!! התיקון כאן !!!
+// src/components/FlowBuilder.jsx - v7 (FIXED CSS IMPORT)
+import React, { useState, useCallback, useEffect } from 'react';
 import ReactFlow, {
   Controls,
   Background,
@@ -8,6 +8,9 @@ import ReactFlow, {
   addEdge,
   MarkerType,
 } from 'reactflow';
+
+// --- !!! התיקון הקריטי כאן: ייבוא ישיר של ה-CSS !!! ---
+import 'reactflow/dist/style.css';
 
 import { questionsTree } from '../constants/questionsTree';
 import QuestionNode from './QuestionNode.jsx';
