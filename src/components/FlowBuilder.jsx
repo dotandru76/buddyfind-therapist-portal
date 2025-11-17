@@ -1,4 +1,4 @@
-// src/components/FlowBuilder.jsx - v8 (With Inspector Panel)
+// src/components/FlowBuilder.jsx - v9 (Fetches real data)
 import React, { useState, useCallback, useEffect } from 'react';
 import ReactFlow, {
   Controls,
@@ -8,17 +8,17 @@ import ReactFlow, {
   addEdge,
   MarkerType,
 } from 'reactflow';
-import 'reactflow/dist/style.css'; // ייבוא ה-CSS
+import 'reactflow/dist/style.css'; 
 
-import { questionsTree } from '../constants/questionsTree';
+import { questionsTree } from '../constants/questionsTree.js';
 import QuestionNode from './QuestionNode.jsx';
 
 const nodeTypes = { questionNode: QuestionNode };
 const defaultViewport = { x: 0, y: 0, zoom: 1 };
 const flowStyles = { height: '700px', border: '1px solid #ddd', borderRadius: '8px', background: '#fefefe' };
 
-// --- פונקציית המרה משודרגת ---
-const convertTreeToFlow = (tree) => {
+// --- פונקציית המרה משודרגת (מקבלת initialData) ---
+const convertTreeToFlow = (tree, initialData) => {
   const nodes = [];
   const edges = [];
   
@@ -33,23 +33,22 @@ const convertTreeToFlow = (tree) => {
   };
 
   const getOutputsForNode = (nodeId, nodeData) => {
-    // --- זו הלוגיקה שיוצרת את התשובות ---
-    if (nodeId === 'start') {
-      return [
-        { id: 'start-opt-1', label: "אם 'נפש' (2)" },
-        { id: 'start-opt-2', label: 'אחר' }
-      ];
+    // --- !!! התיקון: קורא את התשובות האמיתיות מה-initialData !!! ---
+    if (nodeData.optionsKey) {
+        // המרה של פונקציה (כמו ב-profession)
+        if (typeof nodeData.optionsKey === 'function') {
+            // הדמיה של answers ריק, רק כדי לקבל את רשימת המקצועות
+            const mockAnswers = { mainCategory: 2 }; // (דוגמה)
+            return nodeData.optionsKey(mockAnswers, initialData)
+                           .map(opt => ({ id: opt.value, label: opt.label }));
+        }
+        // המרה של מפתח פשוט (כמו 'mainCategories')
+        return (initialData[nodeData.optionsKey] || []).map(opt => ({ id: opt.id || opt.region_key, label: opt.name || opt.region_name_he }));
     }
-    if (nodeId === 'targetEntity' && nodeData.options) {
+    // המרה של תשובות סטטיות (כמו targetEntity)
+    if (nodeData.options) {
       return nodeData.options.map(opt => ({ id: opt.value, label: opt.label }));
     }
-    if (nodeId === 'profession') {
-       return [
-        { id: 'prof-opt-1', label: 'רגיל' },
-        { id: 'prof-opt-2', label: 'דילוג (4,5,6)' }
-      ];
-    }
-    // ברירת מחדל
     return [{ id: 'default', label: 'המשך' }];
   };
 
@@ -58,7 +57,7 @@ const convertTreeToFlow = (tree) => {
       id: nodeId,
       data: { 
         label: nodeData.text,
-        outputs: getOutputsForNode(nodeId, nodeData), // יצירת רשימת תשובות
+        outputs: getOutputsForNode(nodeId, nodeData),
       }, 
       position: positions[nodeId] || { x: 100, y: 100 + nodes.length * 50 },
       type: 'questionNode',
@@ -67,14 +66,18 @@ const convertTreeToFlow = (tree) => {
 
   // יצירת החיצים (Edges)
   edges.push({
-    id: 'start-to-targetEntity', source: 'start', sourceHandle: 'start-opt-1', target: 'targetEntity', 
-    markerEnd: { type: MarkerType.ArrowClosed },
+    id: 'start-to-targetEntity', source: 'start', sourceHandle: 2, target: 'targetEntity', 
+    labelText: "טיפולים רגשיים...", markerEnd: { type: MarkerType.ArrowClosed },
   });
   edges.push({
-    id: 'start-to-audience', source: 'start', sourceHandle: 'start-opt-2', target: 'audience', 
-    markerEnd: { type: MarkerType.ArrowClosed },
+    id: 'start-to-audience', source: 'start', sourceHandle: 1, target: 'audience', 
+    labelText: 'טיפולים פיזיים...', markerEnd: { type: MarkerType.ArrowClosed },
   });
-  // חיבור כל היציאות של targetEntity ל-audience
+  edges.push({
+    id: 'start-to-audience-3', source: 'start', sourceHandle: 3, target: 'audience', 
+    labelText: 'טיפולי שפה ותזונה...', markerEnd: { type: MarkerType.ArrowClosed },
+  });
+
   tree.targetEntity.options.forEach(opt => {
       edges.push({
         id: `targetEntity-${opt.value}-to-audience`,
@@ -82,18 +85,22 @@ const convertTreeToFlow = (tree) => {
         markerEnd: { type: MarkerType.ArrowClosed },
       });
   });
+  
   edges.push({
     id: 'audience-to-profession', source: 'audience', sourceHandle: 'default', target: 'profession',
     markerEnd: { type: MarkerType.ArrowClosed },
   });
+  
+  // (דוגמה לחיבורי מקצועות - זה ידרוש לוגיקה מורכבת יותר בהמשך)
   edges.push({
-    id: 'profession-to-symptoms', source: 'profession', sourceHandle: 'prof-opt-1', target: 'symptoms', 
-    markerEnd: { type: MarkerType.ArrowClosed },
+    id: 'profession-to-symptoms', source: 'profession', sourceHandle: 3, target: 'symptoms', 
+    labelText: "פסיכולוגיה", markerEnd: { type: MarkerType.ArrowClosed },
   });
   edges.push({
-    id: 'profession-to-preferences', source: 'profession', sourceHandle: 'prof-opt-2', target: 'preferences', 
-    markerEnd: { type: MarkerType.ArrowClosed },
+    id: 'profession-to-preferences', source: 'profession', sourceHandle: 4, target: 'preferences', 
+    labelText: "עו\"ס", markerEnd: { type: MarkerType.ArrowClosed },
   });
+
   edges.push({
     id: 'symptoms-to-preferences', source: 'symptoms', sourceHandle: 'default', target: 'preferences',
     markerEnd: { type: MarkerType.ArrowClosed },
@@ -107,66 +114,60 @@ const convertTreeToFlow = (tree) => {
 };
 
 
-// --- !!! רכיב חדש: חלון העריכה הצדדי !!! ---
-const NodeInspector = ({ node, setNodes }) => {
+// --- רכיב חלון העריכה ---
+const NodeInspector = ({ node, setNodes, setEdges }) => {
   const [label, setLabel] = useState(node.data.label);
   const [outputs, setOutputs] = useState(node.data.outputs || []);
 
   useEffect(() => {
     setLabel(node.data.label);
     setOutputs(node.data.outputs || []);
-  }, [node]); // עדכן את הטופס כשהמשתמש בוחר מלבן אחר
+  }, [node]); 
 
-  // עדכון טקסט השאלה
   const updateNodeLabel = () => {
-    setNodes(nds => nds.map(n => {
-      if (n.id === node.id) {
-        return { ...n, data: { ...n.data, label } };
-      }
-      return n;
-    }));
+    setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, label } } : n));
   };
 
-  // עדכון שם של תשובה
   const updateOutputLabel = (index, newLabel) => {
+    const oldLabel = outputs[index].label;
+    const oldId = outputs[index].id;
     const newOutputs = outputs.map((out, i) => i === index ? { ...out, label: newLabel } : out);
     setOutputs(newOutputs);
+    
     setNodes(nds => nds.map(n => {
       if (n.id === node.id) {
         return { ...n, data: { ...n.data, outputs: newOutputs } };
       }
       return n;
     }));
+
+    setEdges(eds => eds.map(e => {
+        if (e.source === node.id && e.sourceHandle === oldId) {
+            return { ...e, sourceHandle: oldId, labelText: `מ-'${newLabel}'` };
+        }
+        return e;
+    }));
   };
   
-  // הוספת תשובה חדשה
   const addOutput = () => {
     const newId = `output_${Date.now()}`;
     const newOutput = { id: newId, label: 'תשובה חדשה' };
     const newOutputs = [...outputs, newOutput];
     setOutputs(newOutputs);
-    setNodes(nds => nds.map(n => {
-      if (n.id === node.id) {
-        return { ...n, data: { ...n.data, outputs: newOutputs } };
-      }
-      return n;
-    }));
+    setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, outputs: newOutputs } } : n));
   };
   
-  // מחיקת תשובה
   const deleteOutput = (indexToDelete) => {
+    const outputToRemove = outputs[indexToDelete];
     const newOutputs = outputs.filter((_, i) => i !== indexToDelete);
     setOutputs(newOutputs);
-    setNodes(nds => nds.map(n => {
-      if (n.id === node.id) {
-        return { ...n, data: { ...n.data, outputs: newOutputs } };
-      }
-      return n;
-    }));
+    
+    setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, outputs: newOutputs } } : n));
+    setEdges(eds => eds.filter(e => !(e.source === node.id && e.sourceHandle === outputToRemove.id)));
   };
 
   return (
-    <div style={{ width: '250px', background: '#f9f9f9', borderRight: '1px solid #ddd', padding: '15px', direction: 'rtl', textAlign: 'right' }}>
+    <div style={{ width: '250px', background: '#f9f9f9', borderRight: '1px solid #ddd', padding: '15px', direction: 'rtl', textAlign: 'right', overflowY: 'auto' }}>
       <h4 style={{ fontWeight: 'bold', borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>עריכת שאלה</h4>
       
       <div style={{ marginTop: '15px' }}>
@@ -175,7 +176,7 @@ const NodeInspector = ({ node, setNodes }) => {
           type="text"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
-          onBlur={updateNodeLabel} // שמור כשהמשתמש יוצא מהשדה
+          onBlur={updateNodeLabel} 
           style={{ width: '100%', border: '1px solid #ccc', padding: '5px' }}
         />
       </div>
@@ -202,56 +203,75 @@ const NodeInspector = ({ node, setNodes }) => {
     </div>
   );
 };
-// --- !!! סוף רכיב חלון העריכה !!! ---
 
 
-function FlowBuilder() {
+function FlowBuilder({ API_URL, onLogout }) { // <-- !!! הוספת Props !!!
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
   const [nodeId, setNodeId] = useState(1); 
-  const [selectedNode, setSelectedNode] = useState(null); // --- !!! 1. מצב חדש לבחירה !!! ---
+  const [selectedNode, setSelectedNode] = useState(null);
+  const [initialData, setInitialData] = useState(null); // <-- !!! מצב חדש לנתונים !!!
 
-  // טעינה ראשונית
+  // --- !!! טעינת הנתונים הראשוניים (קטגוריות וכו') ---
   useEffect(() => {
-    const { initialNodes, initialEdges } = convertTreeToFlow(questionsTree);
-    setNodes(initialNodes);
-    setEdges(initialEdges);
-    setNodeId(initialNodes.length + 1);
-  }, []); 
+    const fetchInitialData = async () => {
+        try {
+            // משתמש בנתיב הקיים של עורך הפרופיל
+            const res = await fetch(`${API_URL}/api/data/options`, { 
+                credentials: 'include' 
+            });
+            if (res.status === 401 || res.status === 403) { onLogout(); return; }
+            if (!res.ok) throw new Error('Failed to fetch initial data');
+            const data = await res.json();
+            setInitialData(data);
+        } catch (err) {
+            console.error("Error fetching initial data:", err);
+        }
+    };
+    fetchInitialData();
+  }, [API_URL, onLogout]);
 
-  // --- !!! 2. עדכון לבחירת מלבן ---
+  // --- !!! אפקט זה ירוץ רק *אחרי* שהנתונים הגיעו ---
+  useEffect(() => {
+    if (initialData) {
+      const { initialNodes, initialEdges } = convertTreeToFlow(questionsTree, initialData);
+      setNodes(initialNodes);
+      setEdges(initialEdges);
+      setNodeId(initialNodes.length + 1);
+    }
+  }, [initialData]); 
+
   const onNodeClick = (event, node) => {
     setSelectedNode(node);
   };
 
-  // פונקציות בסיסיות של React Flow (גרירה, מחיקה)
   const onNodesChange = useCallback(
     (changes) => setNodes((nds) => applyNodeChanges(changes, nds)),
     [setNodes]
   );
-  // --- !!! 3. לוגיקה למחיקת קווים ---
+  
   const onEdgesChange = useCallback(
     (changes) => {
-      console.log("[DEBUG] Edge changes:", changes);
       setEdges((eds) => applyEdgeChanges(changes, eds))
     },
     [setEdges]
   );
   
-  // פונקציה לחיבור בין מלבנים
   const onConnect = useCallback(
     (connection) => {
+      const sourceNode = nodes.find(n => n.id === connection.source);
+      const sourceHandleLabel = sourceNode.data.outputs.find(o => o.id === connection.sourceHandle)?.label || '';
+      
       const newEdge = { 
         ...connection, 
-        labelText: `מ-'${connection.sourceHandle}'`,
+        labelText: `מ-'${sourceHandleLabel}'`,
         markerEnd: { type: MarkerType.ArrowClosed }
       };
       setEdges((eds) => addEdge(newEdge, eds))
     },
-    [setEdges]
+    [setEdges, nodes]
   );
 
-  // הוספת מלבן שאלה חדש
   const addNode = () => {
     const newId = `new_${nodeId}`;
     const newNode = {
@@ -267,15 +287,28 @@ function FlowBuilder() {
     setNodeId(nodeId + 1);
   };
   
-  // שמירה (עדיין מדפיס ל-Console)
   const onSave = () => {
+    const cleanNodes = nodes.map(n => {
+        return { ...n };
+    });
+    
     const flowData = {
-      nodes: nodes.map(n => ({ id: n.id, data: n.data, position: n.position, type: n.type })),
+      nodes: cleanNodes,
       edges: edges.map(e => ({ id: e.id, source: e.source, sourceHandle: e.sourceHandle, target: e.target, labelText: e.labelText })),
     };
     console.log('[DEBUG] שמירת תרשים:', JSON.stringify(flowData, null, 2));
     alert('מבנה התרשים נשמר (בדוק ב-Console)');
   };
+
+  // --- הצג טעינה עד ש-initialData מגיע ---
+  if (!initialData) {
+      return (
+          <div className="bg-white p-6 md:p-8 rounded-lg shadow w-full mx-auto text-center">
+              <div className="spinner w-8 h-8 mx-auto border-t-primary-blue border-r-primary-blue"></div>
+              <p>טוען נתוני שאלון...</p>
+          </div>
+      );
+  }
 
   return (
     <div className="bg-white p-6 md:p-8 rounded-lg shadow w-full mx-auto text-right">
@@ -298,7 +331,6 @@ function FlowBuilder() {
         </button>
       </div>
 
-      {/* --- !!! 4. חלוקה של המסך לעורך וחלון עריכה --- */}
       <div style={{ display: 'flex', height: '700px' }}>
         <div style={{ flexGrow: 1, ...flowStyles }}>
           <ReactFlow
@@ -309,21 +341,21 @@ function FlowBuilder() {
             onConnect={onConnect}
             nodeTypes={nodeTypes}
             defaultViewport={defaultViewport}
-            onNodeClick={onNodeClick} // לכידת לחיצה
-            onPaneClick={() => setSelectedNode(null)} // ביטול בחירה
-            deleteKeyCode={['Backspace', 'Delete']} // --- !!! 5. הפעלת מקש מחיקה !!! ---
+            onNodeClick={onNodeClick}
+            onPaneClick={() => setSelectedNode(null)} 
+            deleteKeyCode={['Backspace', 'Delete']} 
           >
             <Controls />
             <Background />
           </ReactFlow>
         </div>
         
-        {/* הצג את חלון העריכה רק אם נבחר מלבן */}
         {selectedNode && (
           <NodeInspector 
-            key={selectedNode.id} // מאלץ רינדור מחדש כשהבחירה משתנה
+            key={selectedNode.id} 
             node={selectedNode} 
             setNodes={setNodes} 
+            setEdges={setEdges}
           />
         )}
       </div>
