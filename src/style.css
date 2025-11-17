@@ -2,7 +2,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
+@import 'reactflow/dist/style.css';
 /* Custom Color Variables - Crucial for consistent styling */
 :root {
   --primary-blue: #667eea;
