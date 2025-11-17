@@ -1,6 +1,4 @@
-// src/components/TherapistReviewManager.jsx
-// --- גרסה V2.1 (טיפול שגיאות משופר) ---
-
+// src/components/TherapistReviewManager.jsx - SECURED & FIXED
 import React, { useState, useEffect, useCallback } from 'react';
 import moment from 'moment';
 import ViewAnswersModal from './ViewAnswersModal'; 
@@ -27,7 +25,8 @@ const AlertMessage = ({ type, message, onDismiss }) => {
     );
 };
 
-const TherapistReviewManager = ({ authToken, API_URL, onLogout }) => {
+// --- !!! התיקון: הסרת authToken מה-props ---
+const TherapistReviewManager = ({ API_URL, onLogout }) => {
     const [reviews, setReviews] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -37,8 +36,10 @@ const TherapistReviewManager = ({ authToken, API_URL, onLogout }) => {
     const fetchReviews = useCallback(async () => {
         setLoading(true); setError(null);
         try {
+            // --- !!! התיקון: שימוש בעוגיות ---
             const res = await fetch(`${API_URL}/api/professionals/me/questionnaires`, {
-                headers: { 'Authorization': `Bearer ${authToken}` },
+                credentials: 'include'
+                // headers: { 'Authorization': `Bearer ${authToken}` } <-- הוסר
             });
             
             if (res.status === 401 || res.status === 403) {
@@ -46,19 +47,16 @@ const TherapistReviewManager = ({ authToken, API_URL, onLogout }) => {
                 return;
             }
             
-            // --- !!! תיקון: טיפול שגיאות משופר !!! ---
             if (!res.ok) {
                 let errorMsg = `שגיאה ${res.status}`;
                 try {
                     const data = await res.json();
                     errorMsg = data.error || errorMsg;
                 } catch(e) {
-                    // אין גוף JSON, השתמש בטקסט הסטטוס
                     errorMsg = `${errorMsg}: ${res.statusText}`;
                 }
                 throw new Error(errorMsg);
             }
-            // --- סוף התיקון ---
 
             const data = await res.json();
             setReviews(data);
@@ -68,7 +66,8 @@ const TherapistReviewManager = ({ authToken, API_URL, onLogout }) => {
         } finally {
             setLoading(false);
         }
-    }, [authToken, API_URL, onLogout]);
+        // --- !!! התיקון: הסרת authToken מהתלויות ---
+    }, [API_URL, onLogout]);
 
     useEffect(() => {
         fetchReviews();
@@ -80,15 +79,17 @@ const TherapistReviewManager = ({ authToken, API_URL, onLogout }) => {
         fetchReviews(); 
     };
 
+    // --- !!! התיקון: החזרת ה-JSX המקורי ---
     return (
         <>
             {selectedReview && (
                 <ViewAnswersModal
-                    authToken={authToken}
                     API_URL={API_URL}
                     review={selectedReview}
                     onClose={() => setSelectedReview(null)}
                     onActionComplete={handleActionComplete}
+                    // authToken הוסר
+                    onLogout={onLogout} // העברה למקרה של 401
                 />
             )}
 

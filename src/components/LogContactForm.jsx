@@ -1,6 +1,4 @@
-// src/components/LogContactForm.jsx
-// --- גרסה V1.1 (נוסף אפקט רעד) ---
-
+// src/components/LogContactForm.jsx - SECURED & FIXED
 import React, { useState } from 'react';
 
 // (רכיבי עזר פנימיים)
@@ -21,13 +19,13 @@ const AlertMessage = ({ type, message, onDismiss }) => {
 };
 const ButtonSpinner = () => ( <div className="spinner w-5 h-5 border-t-white border-r-white border-b-white border-l-primary-blue"></div> );
 
-
-const LogContactForm = ({ authToken, API_URL, user }) => {
+// --- !!! התיקון: הסרת authToken והוספת onLogout ---
+const LogContactForm = ({ API_URL, user, onLogout }) => {
     const [anonymousId, setAnonymousId] = useState('');
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState(null);
     const [error, setError] = useState(null);
-    const [shake, setShake] = useState(false); // <-- מצב לאנימציה
+    const [shake, setShake] = useState(false); 
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -35,31 +33,38 @@ const LogContactForm = ({ authToken, API_URL, user }) => {
         
         if (!anonymousId.trim()) {
             setError('יש להזין את קוד הזיהוי האנונימי של המטופל.');
-            setShake(true); // <-- הפעל אנימציה
+            setShake(true); 
             return;
         }
         
         setLoading(true);
         
         try {
+            // --- !!! התיקון: שימוש בעוגיות ---
             const res = await fetch(`${API_URL}/api/professionals/me/log-contact`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authToken}`,
+                    // 'Authorization': `Bearer ${authToken}` <-- הוסר
                 },
                 body: JSON.stringify({ client_anonymous_id: anonymousId.trim() }),
+                credentials: 'include' // <-- הוספה
             });
             
+            if (res.status === 401 || res.status === 403) {
+                onLogout();
+                return;
+            }
+
             const data = await res.json();
             
             if (!res.ok) {
-                setShake(true); // <-- הפעל אנימציה גם בשגיאת שרת
+                setShake(true); 
                 throw new Error(data.error || 'שגיאה כללית בדיווח.');
             }
             
             setMessage(data.message || 'הדיווח התקבל בהצלחה.');
-            setAnonymousId(''); // איפוס הטופס
+            setAnonymousId(''); 
             
         } catch (err) {
             setError(err.message || 'שגיאה ברשת או בשרת.');
@@ -68,6 +73,7 @@ const LogContactForm = ({ authToken, API_URL, user }) => {
         }
     };
 
+    // --- !!! התיקון: החזרת ה-JSX המקורי ---
     return (
         <div 
             className={`bg-white p-6 md:p-8 rounded-lg shadow w-full max-w-xl mx-auto text-right mb-8 ${shake ? 'shake-error' : ''}`}
