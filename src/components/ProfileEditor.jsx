@@ -1,4 +1,4 @@
-// src/components/ProfileEditor.jsx - SECURED & FIXED (Full JSX)
+// src/components/ProfileEditor.jsx - FINAL VERSION
 import React, { useState, useEffect, useRef } from 'react';
 import ImageCropper from './ImageCropper';
 import { getCroppedImg } from '../utils/cropImage';
@@ -193,7 +193,7 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
     const addLocation = () => { setFormData(prev => ({ ...prev, locations: [...prev.locations, { city: '', region: '' }] })); setMessage(null); setError(null); };
     const removeLocation = (index) => { setFormData(prev => ({ ...prev, locations: prev.locations.filter((_, i) => i !== index) })); setMessage(null); setError(null); };
     
-    // --- !!! DEBUG לוגיקת זמינות !!! ---
+    // --- DEBUG לוגיקת זמינות ---
     const handleAvailabilityToggle = (day, timeSlot) => {
          console.log(`[DEBUG] נלחץ: יום=${day}, שעה=${timeSlot}`);
          
@@ -308,7 +308,7 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
         finally { setSavingProfile(false); }
     };
     
-    // --- !!! DEBUG לוגיקת שמירת זמינות !!! ---
+    // --- DEBUG לוגיקת שמירת זמינות ---
     const handleAvailabilitySubmit = async () => {
         setSavingAvailability(true); setError(null); setMessage(null);
         
@@ -347,7 +347,6 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
     if (loading) { return <LoadingSpinner />; }
     if (error && !formData.email) { return <AlertMessage type="error" message={error} onDismiss={() => setError(null)} />; }
 
-    // --- !!! התיקון: החזרת ה-JSX המקורי המלא !!! ---
     return (
         <div className="space-y-8 md:space-y-12">
             {isCropping && ( <ImageCropper imageSrc={imageToCrop} onCropComplete={onCropComplete} onCancel={() => setIsCropping(false)} /> )}
@@ -392,12 +391,12 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
                                     name="whatsapp_number" 
                                     value={formData.whatsapp_number || ''} 
                                     onChange={handleChange} 
-                                    placeholder="972XXXXXXXX"
+                                    placeholder="+97250..."
                                     className="mt-1 block w-full px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-primary-blue focus:border-primary-blue text-center" 
                                     style={{ direction: 'ltr' }}
                                 /> 
                                 <p className="text-xs text-gray-500 mt-1 text-center">
-                                    חובה להתחיל עם הקידומת הבינלאומית (972) כדי שהקישור יעבוד.
+                                    מומלץ בפורמט בינלאומי (למשל: +97250...) או מקומי (050...).
                                 </p>
                              </div>
                          </div>
@@ -538,6 +537,7 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
                                                 title={`${day}, ${slot} - ${isSelected ? 'פנוי/ה (בטל)' : 'לא פנוי/ה (הוסף)'}`}>
                                             </td>
                                         );
+Vertical-Align: middle;
                                     })}
                                 </tr>
                             ))}
