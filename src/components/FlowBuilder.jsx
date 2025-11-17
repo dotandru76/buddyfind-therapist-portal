@@ -1,4 +1,4 @@
-// src/components/FlowBuilder.jsx - v10 (Fixes Deletion & All Options)
+// src/components/FlowBuilder.jsx - v11 (Fixed Provider Import)
 import React, { useState, useCallback, useEffect } from 'react';
 import ReactFlow, {
   Controls,
@@ -7,7 +7,8 @@ import ReactFlow, {
   applyEdgeChanges,
   addEdge,
   MarkerType,
-  useReactFlow, // --- 1. הוספנו Hook חדש ---
+  useReactFlow,
+  ReactFlowProvider, // --- !!! 1. התיקון כאן: הוספת הייבוא החסר !!! ---
 } from 'reactflow';
 import 'reactflow/dist/style.css'; 
 
@@ -18,7 +19,7 @@ const nodeTypes = { questionNode: QuestionNode };
 const defaultViewport = { x: 0, y: 0, zoom: 1 };
 const flowStyles = { height: '700px', border: '1px solid #ddd', borderRadius: '8px', background: '#fefefe' };
 
-// --- פונקציית המרה משודרגת (מקבלת initialData) ---
+// --- פונקציית המרה משודרגת ---
 const convertTreeToFlow = (tree, initialData) => {
   const nodes = [];
   const edges = [];
@@ -34,29 +35,23 @@ const convertTreeToFlow = (tree, initialData) => {
   };
 
   const getOutputsForNode = (nodeId, nodeData) => {
-    // --- !!! 2. לוגיקה חדשה ונכונה להצגת תשובות !!! ---
     if (nodeData.optionsKey) {
-        // --- זה המפתח ---
         if (typeof nodeData.optionsKey === 'function') {
-            // אם האופציות דינמיות (כמו 'profession' או 'symptoms')
-            // נציג רק יציאה אחת, כי אנחנו לא יודעים את התשובה הקודמת
-            return [{ id: 'dynamic_output', label: '(אופציות דינמיות)' }];
+            const mockAnswers = { mainCategory: 2 }; 
+            return nodeData.optionsKey(mockAnswers, initialData)
+                           .map(opt => ({ id: opt.value, label: opt.label }));
         }
-        // אם האופציות סטטיות (כמו 'mainCategories' או 'regions')
-        // טען אותן מ-initialData
         const dataKey = nodeData.optionsKey;
         if (initialData && initialData[dataKey]) {
             return initialData[dataKey].map(opt => ({
-                id: opt.id || opt.region_key, // טיפול במקרה של 'regions'
-                label: opt.name || opt.region_name_he // טיפול במקרה של 'regions'
+                id: opt.id || opt.region_key,
+                label: opt.name || opt.region_name_he
             }));
         }
     }
-    // אם האופציות מקודדות (כמו 'targetEntity' או 'preferences')
     if (nodeData.options) {
       return nodeData.options.map(opt => ({ id: opt.value, label: opt.label }));
     }
-    // אם אין אופציות (כמו 'audience')
     return [{ id: 'default', label: 'המשך' }];
   };
 
@@ -65,14 +60,14 @@ const convertTreeToFlow = (tree, initialData) => {
       id: nodeId,
       data: { 
         label: nodeData.text,
-        outputs: getOutputsForNode(nodeId, nodeData), // קריאה לפונקציה החדשה
+        outputs: getOutputsForNode(nodeId, nodeData),
       }, 
       position: positions[nodeId] || { x: 100, y: 100 + nodes.length * 50 },
       type: 'questionNode',
     });
   }
 
-  // יצירת החיצים (Edges) - עם מזהי ידיות נכונים
+  // יצירת החיצים (Edges)
   edges.push({
     id: 'start-to-targetEntity', source: 'start', sourceHandle: 2, target: 'targetEntity', 
     labelText: "טיפולים רגשיים...", markerEnd: { type: MarkerType.ArrowClosed },
@@ -103,13 +98,12 @@ const convertTreeToFlow = (tree, initialData) => {
     markerEnd: { type: MarkerType.ArrowClosed },
   });
   
-  // חיבור דינמי
   edges.push({
-    id: 'profession-to-dynamic', source: 'profession', sourceHandle: 'dynamic_output', target: 'symptoms', 
+    id: 'profession-to-symptoms', source: 'profession', sourceHandle: 'dynamic_output', target: 'symptoms', 
     labelText: 'רגיל', markerEnd: { type: MarkerType.ArrowClosed },
   });
    edges.push({
-    id: 'profession-to-dynamic-skip', source: 'profession', sourceHandle: 'dynamic_output', target: 'preferences', 
+    id: 'profession-to-preferences', source: 'profession', sourceHandle: 'dynamic_output', target: 'preferences', 
     labelText: 'דילוג', markerEnd: { type: MarkerType.ArrowClosed },
   });
 
@@ -145,7 +139,7 @@ const NodeInspector = ({ node, setNodes, setEdges }) => {
   };
 
   const updateOutputLabel = (index, newLabel) => {
-    const oldId = outputs[index].id; // שמור את המזהה הישן
+    const oldId = outputs[index].id; 
     const newOutputs = outputs.map((out, i) => i === index ? { ...out, label: newLabel } : out);
     setOutputs(newOutputs);
     
@@ -156,7 +150,6 @@ const NodeInspector = ({ node, setNodes, setEdges }) => {
       return n;
     }));
 
-    // עדכון החיצים שיוצאים מהידית הזו
     setEdges(eds => eds.map(e => {
         if (e.source === node.id && e.sourceHandle === oldId) {
             return { ...e, labelText: `מ-'${newLabel}'` };
@@ -220,6 +213,7 @@ const NodeInspector = ({ node, setNodes, setEdges }) => {
   );
 };
 
+
 // --- עטיפה ל-FlowBuilder כדי שנוכל להשתמש ב-Hooks ---
 const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
   const [nodes, setNodes] = useState([]);
@@ -227,7 +221,7 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
   const [nodeId, setNodeId] = useState(1); 
   const [selectedNode, setSelectedNode] = useState(null);
   const [initialData, setInitialData] = useState(null);
-  const reactFlowInstance = useReactFlow(); // --- 3. Hook לגישה לפונקציות ---
+  const reactFlowInstance = useReactFlow(); 
 
   // טעינת הנתונים הראשוניים
   useEffect(() => {
@@ -273,25 +267,16 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
     [setEdges]
   );
   
-  // --- !!! 4. תיקון יכולת המחיקה !!! ---
   const onNodesDelete = useCallback(
     (deleted) => {
       setEdges((eds) =>
         deleted.reduce((acc, node) => {
-          // מוחק גם את הקווים שמחוברים למלבן שנמחק
           return acc.filter((edge) => edge.source !== node.id && edge.target !== node.id);
         }, eds)
       );
     },
     [setNodes, setEdges]
   );
-  const onEdgesDelete = useCallback(
-    (deleted) => {
-      // פשוט מאשר את המחיקה
-    },
-    [setEdges]
-  );
-  // --- סוף תיקון מחיקה ---
   
   const onConnect = useCallback(
     (connection) => {
@@ -373,8 +358,7 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
-            onNodesDelete={onNodesDelete} // --- 5. הוספנו האזנה למחיקה ---
-            onEdgesDelete={onEdgesDelete} // --- 5. הוספנו האזנה למחיקה ---
+            onNodesDelete={onNodesDelete} 
             onConnect={onConnect}
             nodeTypes={nodeTypes}
             defaultViewport={defaultViewport}
@@ -400,7 +384,7 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
   );
 }
 
-// --- !!! 6. עטיפה של הרכיב הראשי ב-Provider של React Flow !!! ---
+// --- עטיפה של הרכיב הראשי ב-Provider של React Flow ---
 export default ({ API_URL, onLogout }) => (
   <ReactFlowProvider>
     <FlowBuilderWrapper API_URL={API_URL} onLogout={onLogout} />
