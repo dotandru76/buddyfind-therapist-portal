@@ -1,4 +1,4 @@
-// src/components/ProfileEditor.jsx - SECURED & FIXED
+// src/components/ProfileEditor.jsx - SECURED & FIXED (Full JSX)
 import React, { useState, useEffect, useRef } from 'react';
 import ImageCropper from './ImageCropper';
 import { getCroppedImg } from '../utils/cropImage';
@@ -38,7 +38,6 @@ const Checkbox = ({ label, checked, onChange, name }) => (
 );
 
 // --- Main Component ---
-// --- !!! התיקון: הסרת authToken מה-props ---
 const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
     const [formData, setFormData] = useState({
         full_name: '', email: '', phone_number: '', bio: '', profession_id: '',
@@ -73,7 +72,7 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
         let isMounted = true;
         const fetchInitialData = async () => {
             
-            if (!user?.id) { // <-- שינוי: בדיקת user.id
+            if (!user?.id) {
                 setError("שגיאה בטעינת נתונים: פרטי המשתמש אינם תקינים.");
                 if (isMounted) setLoading(false);
                 return;
@@ -82,7 +81,6 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
             if (isMounted) setLoading(true); setError(null); setMessage(null);
 
             try {
-                // --- !!! התיקון: שימוש בעוגיות !!! ---
                 const fetchOptions = { credentials: 'include' };
                 
                 const optionsRes = await fetch(`${API_URL}/api/data/options`, fetchOptions);
@@ -140,7 +138,6 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
         };
         fetchInitialData();
         return () => { isMounted = false; };
-        // --- !!! התיקון: הסרת authToken מהתלויות ---
     }, [API_URL, user, onLogout]); 
 
 
@@ -155,50 +152,105 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
      }, [formData.profession_id, allSpecialties]);
 
 
-    // --- Handlers (ללא שינוי) ---
+    // --- Handlers ---
+    
     const handleChange = (e) => {
          const { name, value, type, checked } = e.target;
+         
          setFormData(prev => {
             let newValue;
-            if (type === 'checkbox') { newValue = checked; }
-            else if (type === 'number') { newValue = parseInt(value, 10) || 0; }
-            else { newValue = value; }
+            if (type === 'checkbox') {
+                newValue = checked;
+            } else if (type === 'number') {
+                newValue = parseInt(value, 10) || 0;
+            } else {
+                newValue = value;
+            }
+
             const newState = { ...prev, [name]: newValue };
-            if (name === 'profession_id') { newState.specialties = []; }
+            
+            if (name === 'profession_id') {
+                newState.specialties = [];
+            }
+            
             return newState;
          });
+         
          setMessage(null); setError(null);
     };
-    const handleSpecialtyToggle = (specialtyId) => { /* ... */ };
-    const handleLocationChange = (index, field, value) => { /* ... */ };
-    const addLocation = () => { /* ... */ };
-    const removeLocation = (index) => { /* ... */ };
-    const handleAvailabilityToggle = (day, timeSlot) => { /* ... */ };
+
+    const handleSpecialtyToggle = (specialtyId) => {
+        setFormData(prev => ({ ...prev, specialties: prev.specialties.includes(specialtyId) ? prev.specialties.filter(id => id !== specialtyId) : [...prev.specialties, specialtyId] }));
+        setMessage(null); setError(null);
+    };
+    const handleLocationChange = (index, field, value) => {
+        const updatedLocations = [...formData.locations];
+        if (field === 'city') updatedLocations[index].city = value;
+        if (field === 'region') updatedLocations[index].region = value; 
+        setFormData(prev => ({ ...prev, locations: updatedLocations }));
+        setMessage(null); setError(null);
+    };
+    const addLocation = () => { setFormData(prev => ({ ...prev, locations: [...prev.locations, { city: '', region: '' }] })); setMessage(null); setError(null); };
+    const removeLocation = (index) => { setFormData(prev => ({ ...prev, locations: prev.locations.filter((_, i) => i !== index) })); setMessage(null); setError(null); };
+    
+    // --- !!! DEBUG לוגיקת זמינות !!! ---
+    const handleAvailabilityToggle = (day, timeSlot) => {
+         console.log(`[DEBUG] נלחץ: יום=${day}, שעה=${timeSlot}`);
+         
+         setFormData(prev => {
+            const currentAvailability = prev.availability || {};
+            const dayAvailability = currentAvailability[day] || [];
+            const isSelected = dayAvailability.includes(timeSlot);
+            
+            console.log(`[DEBUG] מצב נוכחי: ${isSelected ? 'מסומן' : 'לא מסומן'}`);
+            
+            const updatedDayAvailability = isSelected 
+                ? dayAvailability.filter(slot => slot !== timeSlot)
+                : [...dayAvailability, timeSlot];
+            
+            const updatedAvailability = { ...currentAvailability };
+
+            if (updatedDayAvailability.length === 0) {
+                delete updatedAvailability[day];
+            } else {
+                updatedAvailability[day] = updatedDayAvailability;
+            }
+            
+            console.log('[DEBUG] מצב חדש ל-availability:', updatedAvailability);
+            
+            return { ...prev, availability: updatedAvailability };
+         });
+         
+         setMessage(null); setError(null);
+    };
+
 
     // --- Image Cropper Logic ---
     const handleImageClick = () => { if (fileInputRef.current) fileInputRef.current.value = null; fileInputRef.current?.click(); };
-    const onFileChange = (e) => { /* ... */ };
-    const onCropComplete = (croppedImageBlob) => { /* ... */ };
-    
+    const onFileChange = (e) => {
+        const file = e.target.files?.[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onloadend = () => { setImageToCrop(reader.result); setIsCropping(true); };
+        reader.readAsDataURL(file);
+    };
+    const onCropComplete = (croppedImageBlob) => {
+        setIsCropping(false); if (!croppedImageBlob) return;
+        const localPreviewUrl = URL.createObjectURL(croppedImageBlob);
+        setFormData(prev => ({ ...prev, profile_image_url: localPreviewUrl }));
+        uploadCroppedImage(croppedImageBlob);
+    };
     const uploadCroppedImage = async (imageBlob) => {
         setSavingImage(true); setError(null); setMessage(null);
         try {
-            const uploadFormData = new FormData(); 
-            uploadFormData.append('profileImage', imageBlob, 'profile.jpg');
-            
-            // --- !!! התיקון: שימוש בעוגיות !!! ---
+            const uploadFormData = new FormData(); uploadFormData.append('profileImage', imageBlob, 'profile.jpg');
             const res = await fetch(`${API_URL}/api/professionals/me/upload-image`, { 
                 method: 'POST', 
-                credentials: 'include', // <-- הוספה
-                // headers: { 'Authorization': `Bearer ${authToken}` }, <-- הוסר
+                credentials: 'include',
                 body: uploadFormData 
             });
-            
             if (res.status === 401 || res.status === 403) { onLogout(); return; }
-            const data = await res.json(); 
-            if (!res.ok) { throw new Error(data.error || 'Image upload failed'); }
-            setFormData(prev => ({ ...prev, profile_image_url: data.imageUrl })); 
-            setMessage('תמונה הועלתה בהצלחה!');
+            const data = await res.json(); if (!res.ok) { throw new Error(data.error || 'Image upload failed'); }
+            setFormData(prev => ({ ...prev, profile_image_url: data.imageUrl })); setMessage('תמונה הועלתה בהצלחה!');
         } catch (err) { console.error('Image upload error:', err); setError(err.message || 'שגיאה בהעלאת התמונה.'); }
         finally { setSavingImage(false); }
     };
@@ -209,21 +261,42 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
         
         try {
             const { profile_image_url, email, availability, is_verified, ...payload } = formData;
-            // ... (לוגיקת payload ללא שינוי) ...
             
-            // --- !!! התיקון: שימוש בעוגיות !!! ---
+            payload.profession_id = parseInt(payload.profession_id, 10) || null;
+            payload.years_of_practice = parseInt(payload.years_of_practice, 10) || 0;
+            payload.specialties = payload.specialties || []; 
+            payload.license_number = formData.license_number || null; 
+            payload.whatsapp_number = formData.whatsapp_number || null;
+            payload.is_accessible = formData.is_accessible;
+            payload.offers_reduced_fee = formData.offers_reduced_fee;
+            
+            payload.locations = (payload.locations || [])
+                .map(loc => ({ city: loc.city?.trim(), region: loc.region })) 
+                .filter(loc => 
+                    loc.region && 
+                    (loc.city || loc.region === 'online') 
+                );
+            
+            payload.age_ranges = formData.age_ranges || []; 
+
             const res = await fetch(`${API_URL}/api/professionals/me`, { 
                 method: 'PUT', 
                 headers: { 'Content-Type': 'application/json' }, 
                 body: JSON.stringify(payload),
-                credentials: 'include' // <-- הוספה
-                // 'Authorization': `Bearer ${authToken}` <-- הוסר
+                credentials: 'include'
             });
             
             if (res.status === 401 || res.status === 403) { onLogout(); return; }
+            
             const data = await res.json(); 
-            if (res.status === 400 && data.error && data.error.includes('התמחויות')) { throw new Error(data.error); }
-            if (!res.ok) { throw new Error(data.error || 'Update failed'); }
+            
+            if (res.status === 400 && data.error && data.error.includes('התמחויות')) {
+                 throw new Error(data.error);
+            }
+
+            if (!res.ok) { 
+                throw new Error(data.error || 'Update failed'); 
+            }
             
             setMessage('✅ פרטי הפרופיל עודכנו!'); 
             if(onUpdateSuccess) onUpdateSuccess(); 
@@ -235,21 +308,38 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
         finally { setSavingProfile(false); }
     };
     
+    // --- !!! DEBUG לוגיקת שמירת זמינות !!! ---
     const handleAvailabilitySubmit = async () => {
         setSavingAvailability(true); setError(null); setMessage(null);
+        
+        const payload = { availability: formData.availability || {} };
+        console.log('[DEBUG] שולח לשרת:', JSON.stringify(payload));
+
         try {
-             // --- !!! התיקון: שימוש בעוגיות !!! ---
              const res = await fetch(`${API_URL}/api/professionals/me/availability`, { 
                  method: 'PUT', 
                  headers: { 'Content-Type': 'application/json' }, 
-                 body: JSON.stringify({ availability: formData.availability || {} }),
-                 credentials: 'include' // <-- הוספה
+                 body: JSON.stringify(payload),
+                 credentials: 'include'
              });
+             
              if (res.status === 401 || res.status === 403) { onLogout(); return; }
+             
              const data = await res.json(); 
-             if (!res.ok) { throw new Error(data.error || 'Update failed'); }
+             
+             if (!res.ok) { 
+                 console.error('[DEBUG] שגיאת שרת:', data.error);
+                 throw new Error(data.error || 'Update failed'); 
+             }
+             
+             console.log('[DEBUG] השרת החזיר:', data);
              setMessage('✅ זמינות עודכנה!');
-        } catch (err) { console.error('Availability Update error:', err); setError(err.message || 'שגיאה בעדכון הזמינות.'); }
+             setFormData(prev => ({ ...prev, availability: data.availability }));
+
+        } catch (err) { 
+            console.error('Availability Update error:', err); 
+            setError(err.message || 'שגיאה בעדכון הזמינות.'); 
+        }
          finally { setSavingAvailability(false); }
     };
 
@@ -257,7 +347,7 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
     if (loading) { return <LoadingSpinner />; }
     if (error && !formData.email) { return <AlertMessage type="error" message={error} onDismiss={() => setError(null)} />; }
 
-    // --- !!! התיקון: החזרת ה-JSX המקורי שלך !!! ---
+    // --- !!! התיקון: החזרת ה-JSX המקורי המלא !!! ---
     return (
         <div className="space-y-8 md:space-y-12">
             {isCropping && ( <ImageCropper imageSrc={imageToCrop} onCropComplete={onCropComplete} onCancel={() => setIsCropping(false)} /> )}
@@ -438,7 +528,9 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
                                 <tr key={day} className="divide-x divide-gray-200">
                                     <td className="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900 border border-gray-200">{day}</td>
                                     {defSlots.map(slot => {
-                                        const isSelected = formData.availability && formData.availability[day]?.includes(slot);
+                                        const isSelected = formData.availability && 
+                                                           formData.availability[day] && 
+                                                           formData.availability[day].includes(slot);
                                         return (
                                             <td key={slot}
                                                 className={`px-1 py-4 md:px-3 md:py-3 border border-gray-200 cursor-pointer transition-colors duration-150 ease-in-out text-center ${isSelected ? 'bg-primary-blue/80 hover:bg-primary-blue' : 'bg-white hover:bg-primary-blue/10'}`}
@@ -446,7 +538,6 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
                                                 title={`${day}, ${slot} - ${isSelected ? 'פנוי/ה (בטל)' : 'לא פנוי/ה (הוסף)'}`}>
                                             </td>
                                         );
-
                                     })}
                                 </tr>
                             ))}
