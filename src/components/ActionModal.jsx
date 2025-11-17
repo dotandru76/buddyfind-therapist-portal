@@ -1,8 +1,8 @@
-// src/components/ActionModal.jsx - SECURED (Fixed .jsx import
+// src/components/ActionModal.jsx - SECURED (Fixed Case-Sensitivity Import)
 import React, { useState, useEffect, useMemo } from 'react';
 import moment from 'moment';
-// --- !!! התיקון: הוספת סיומת .jsx לייבוא !!! ---
-import AdminResolveReviewModal from './AdminResolveReviewModal.jsx'; 
+// --- !!! התיקון: שינוי ל-a קטנה וסיומת .jsx !!! ---
+import AdminResolveReviewModal from './adminResolveReviewModal.jsx'; 
 
 // (רכיבי עזר פנימיים)
 const LoadingSpinner = () => ( <div className="text-center p-5"><div className="spinner w-8 h-8 mx-auto border-t-primary-blue border-r-primary-blue"></div></div> );
@@ -85,7 +85,6 @@ const ActionModal = ({ modalType, API_URL, onClose, onActionComplete, onLogout }
     // --- פונקציות לביצוע פעולות ---
     
     const handleReviewAction = async (reviewId, newStatus) => {
-        // (שים לב: לוגיקה זו שייכת למערכת הישנה, ודא שהיא נכונה)
         setActionLoading(reviewId);
         try {
             const res = await fetch(`${API_URL}/api/admin/reviews/${reviewId}/status`, {
