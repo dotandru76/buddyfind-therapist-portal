@@ -1,8 +1,8 @@
 // src/components/ActionModal.jsx - SECURED (Fixed Case-Sensitivity Import)
 import React, { useState, useEffect, useMemo } from 'react';
 import moment from 'moment';
-// --- !!! התיקון: שינוי ל-a קטנה וסיומת .jsx !!! ---
-import AdminResolveReviewModal from './adminResolveReviewModal.jsx'; 
+// --- !!! התיקון: החזרת ה-A הגדולה וסיומת .jsx !!! ---
+import AdminResolveReviewModal from './AdminResolveReviewModal.jsx'; 
 
 // (רכיבי עזר פנימיים)
 const LoadingSpinner = () => ( <div className="text-center p-5"><div className="spinner w-8 h-8 mx-auto border-t-primary-blue border-r-primary-blue"></div></div> );
