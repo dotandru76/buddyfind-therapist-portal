@@ -1,7 +1,7 @@
-// src/components/RegisterModal.jsx
+// src/components/RegisterModal.jsx - FIXED
 import React, { useState } from 'react';
 
-const RegisterModal = ({ handleRegister, loading, onLoginClick, authError }) => { // הוספנו קבלת שגיאה
+const RegisterModal = ({ handleRegister, loading, onLoginClick, authError }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -28,6 +28,7 @@ const RegisterModal = ({ handleRegister, loading, onLoginClick, authError }) => 
         }
     }, [authError]);
 
+    // --- !!! התיקון: החזרת ה-JSX המקורי ---
     return (
         <div className="flex flex-col items-center justify-center min-h-[calc(100vh-150px)] p-4">
             <div 
