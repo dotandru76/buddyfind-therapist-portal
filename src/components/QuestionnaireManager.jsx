@@ -1,18 +1,51 @@
-// src/components/QuestionnaireManager.jsx - SECURED
+// src/components/QuestionnaireManager.jsx - SECURED & FIXED
 import React, { useState, useEffect, useCallback } from 'react';
 import QuestionnaireTemplateEditor from './QuestionnaireTemplateEditor'; 
 import SendQuestionnaireModal from './SendQuestionnaireModal';
 import moment from 'moment';
 
-// (רכיבי עזר פנימיים - ללא שינוי)
-const LoadingSpinner = () => ( /* ... */ );
-const AlertMessage = ({ type, message, onDismiss }) => { /* ... */ };
-const TabButton = ({ text, isActive, onClick }) => ( /* ... */ );
+// --- !!! התיקון: החזרת ה-JSX המלא של רכיבי העזר ---
+const LoadingSpinner = () => (
+    <div className="text-center p-5">
+        <div className="spinner w-8 h-8 mx-auto border-t-primary-blue border-r-primary-blue"></div>
+    </div>
+);
+
+const AlertMessage = ({ type, message, onDismiss }) => {
+    if (!message) return null;
+    const baseClasses = "px-4 py-3 rounded relative mb-4 text-right";
+    const typeClasses = type === 'success' ? "bg-green-100 border-green-400 text-green-700" : "bg-red-100 border-red-400 text-red-700";
+    return (
+        <div className={`${baseClasses} ${typeClasses}`} role="alert">
+            <span className="block sm:inline">{message}</span>
+            {onDismiss && (
+                <span className="absolute top-0 bottom-0 left-0 px-4 py-3 cursor-pointer" onClick={onDismiss}>
+                    <svg className="fill-current h-6 w-6 text-red-500" role="button" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><title>Close</title><path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z"/></svg>
+                </span>
+            )}
+        </div>
+    );
+};
+
+const TabButton = ({ text, isActive, onClick }) => (
+    <button
+        onClick={onClick}
+        className={`px-6 py-2 rounded-t-lg font-semibold ${
+            isActive 
+            ? 'bg-white text-primary-blue border-b-0' 
+            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+        }`}
+    >
+        {text}
+    </button>
+);
+// --- !!! סוף התיקון ---
+
 
 // --- !!! התיקון: הסרת authToken והוספת onLogout ---
 const QuestionnaireManager = ({ API_URL, onBack, onLogout }) => {
-    const [view, setView] = useState('list'); 
-    const [currentTab, setCurrentTab] = useState('track'); 
+    const [view, setView] = useState('list'); // 'list' or 'editor'
+    const [currentTab, setCurrentTab] = useState('track'); // 'track' or 'templates'
     
     const [templates, setTemplates] = useState([]);
     const [sentQuestionnaires, setSentQuestionnaires] = useState([]);
@@ -21,7 +54,7 @@ const QuestionnaireManager = ({ API_URL, onBack, onLogout }) => {
     const [error, setError] = useState(null);
     
     const [isSendModalOpen, setIsSendModalOpen] = useState(false);
-    const [selectedTemplate, setSelectedTemplate] = useState(null); 
+    const [selectedTemplate, setSelectedTemplate] = useState(null); // אובייקט התבנית המלא לעריכה
 
     // --- טעינת נתונים ---
     const fetchData = useCallback(async () => {
@@ -51,27 +84,45 @@ const QuestionnaireManager = ({ API_URL, onBack, onLogout }) => {
             setTemplates(templatesData);
             setSentQuestionnaires(sentData);
             
-        } catch (err) { setError(err.message); } 
-        finally { setLoading(false); }
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
     }, [API_URL, onLogout]); // <-- עדכון תלויות
 
-    useEffect(() => { fetchData(); }, [fetchData]);
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
 
-    // ... (פונקציות ניווט פנימיות - ללא שינוי) ...
-    const handleEditTemplate = (template) => { /* ... */ };
-    const handleCreateNewTemplate = () => { /* ... */ };
-    const onSaveTemplateComplete = () => { /* ... */ };
-    const onSendComplete = () => { /* ... */ };
+    const handleEditTemplate = (template) => {
+        setSelectedTemplate(template); 
+        setView('editor');
+    };
+    
+    const handleCreateNewTemplate = () => {
+        setSelectedTemplate(null); 
+        setView('editor');
+    };
 
-    // --- !!! התיקון: החזרת ה-JSX המקורי ---
+    const onSaveTemplateComplete = () => {
+        setView('list'); 
+        fetchData(); 
+    };
+    
+    const onSendComplete = () => {
+        setIsSendModalOpen(false);
+        fetchData(); 
+    };
+
     if (view === 'editor') {
         return (
             <QuestionnaireTemplateEditor
                 API_URL={API_URL}
-                template={selectedTemplate}
+                template={selectedTemplate} 
                 onBack={() => setView('list')}
                 onSave={onSaveTemplateComplete}
-                onLogout={onLogout} // העברה
+                onLogout={onLogout} 
             />
         );
     }
@@ -84,7 +135,7 @@ const QuestionnaireManager = ({ API_URL, onBack, onLogout }) => {
                     onClose={() => setIsSendModalOpen(false)}
                     onSend={onSendComplete}
                     templates={templates}
-                    onLogout={onLogout} // העברה
+                    onLogout={onLogout} 
                 />
             )}
         
@@ -100,8 +151,16 @@ const QuestionnaireManager = ({ API_URL, onBack, onLogout }) => {
                 </div>
 
                 <div className="flex border-b border-gray-200">
-                    <TabButton text="מעקב שאלונים" isActive={currentTab === 'track'} onClick={() => setCurrentTab('track')} />
-                    <TabButton text="רשימת תבניות" isActive={currentTab === 'templates'} onClick={() => setCurrentTab('templates')} />
+                    <TabButton 
+                        text="מעקב שאלונים" 
+                        isActive={currentTab === 'track'} 
+                        onClick={() => setCurrentTab('track')} 
+                    />
+                    <TabButton 
+                        text="רשימת תבניות" 
+                        isActive={currentTab === 'templates'} 
+                        onClick={() => setCurrentTab('templates')} 
+                    />
                 </div>
 
                 {loading && <LoadingSpinner />}
@@ -118,7 +177,36 @@ const QuestionnaireManager = ({ API_URL, onBack, onLogout }) => {
                                     + שלח שאלון חדש ללקוח
                                 </button>
                                 <table className="min-w-full divide-y divide-gray-200 text-sm">
-                                    {/* ... (טבלת מעקב - ללא שינוי) ... */}
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">סטטוס</th>
+                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">לקוח</th>
+                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">שם התבנית</th>
+                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">מטפל משויך</th>
+                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">נשלח בתאריך</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {sentQuestionnaires.length > 0 ? sentQuestionnaires.map(item => (
+                                            <tr key={item.id} className="hover:bg-gray-50">
+                                                <td className="px-4 py-3">
+                                                     <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                                        item.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                                        item.status === 'viewed' ? 'bg-blue-100 text-blue-800' :
+                                                        'bg-yellow-100 text-yellow-800'
+                                                    }`}>
+                                                        {item.status === 'completed' ? 'הושלם' : item.status === 'viewed' ? 'נצפה' : 'ממתין'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 font-semibold">{item.client_email}</td>
+                                                <td className="px-4 py-3">{item.questionnaire_name}</td>
+                                                <td className="px-4 py-3">{item.professional_name}</td>
+                                                <td className="px-4 py-3">{moment(item.sent_at).format('DD/MM/YYYY')}</td>
+                                            </tr>
+                                        )) : (
+                                            <tr><td colSpan="5" className="p-5 text-center text-gray-500">עדיין לא נשלחו שאלונים.</td></tr>
+                                        )}
+                                    </tbody>
                                 </table>
                             </div>
                         )}
@@ -132,7 +220,33 @@ const QuestionnaireManager = ({ API_URL, onBack, onLogout }) => {
                                     + צור תבנית חדשה
                                 </button>
                                 <table className="min-w-full divide-y divide-gray-200 text-sm">
-                                    {/* ... (טבלת תבניות - ללא שינוי) ... */}
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">שם התבנית</th>
+                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">תיאור</th>
+                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">נוצר בתאריך</th>
+                                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">פעולות</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {templates.length > 0 ? templates.map(template => (
+                                            <tr key={template.id} className="hover:bg-gray-50">
+                                                <td className="px-4 py-3 font-semibold">{template.name}</td>
+                                                <td className="px-4 py-3 text-gray-600">{template.description}</td>
+                                                <td className="px-4 py-3">{moment(template.created_at).format('DD/MM/YYYY')}</td>
+                                                <td className="px-4 py-3">
+                                                    <button 
+                                                        onClick={() => handleEditTemplate(template)}
+                                                        className="py-1 px-3 bg-primary-blue text-white rounded-md text-xs font-medium hover:bg-secondary-purple transition"
+                                                    >
+                                                        ערוך
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        )) : (
+                                            <tr><td colSpan="4" className="p-5 text-center text-gray-500">לא נמצאו תבניות שאלונים.</td></tr>
+                                        )}
+                                    </tbody>
                                 </table>
                             </div>
                         )}
