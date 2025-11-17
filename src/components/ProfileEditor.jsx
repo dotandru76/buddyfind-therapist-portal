@@ -1,4 +1,4 @@
-// src/components/ProfileEditor.jsx - FINAL VERSION
+// src/components/ProfileEditor.jsx - FINAL VERSION (CSS line removed)
 import React, { useState, useEffect, useRef } from 'react';
 import ImageCropper from './ImageCropper';
 import { getCroppedImg } from '../utils/cropImage';
@@ -193,7 +193,6 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
     const addLocation = () => { setFormData(prev => ({ ...prev, locations: [...prev.locations, { city: '', region: '' }] })); setMessage(null); setError(null); };
     const removeLocation = (index) => { setFormData(prev => ({ ...prev, locations: prev.locations.filter((_, i) => i !== index) })); setMessage(null); setError(null); };
     
-    // --- DEBUG לוגיקת זמינות ---
     const handleAvailabilityToggle = (day, timeSlot) => {
          console.log(`[DEBUG] נלחץ: יום=${day}, שעה=${timeSlot}`);
          
@@ -308,7 +307,6 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
         finally { setSavingProfile(false); }
     };
     
-    // --- DEBUG לוגיקת שמירת זמינות ---
     const handleAvailabilitySubmit = async () => {
         setSavingAvailability(true); setError(null); setMessage(null);
         
@@ -537,7 +535,7 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
                                                 title={`${day}, ${slot} - ${isSelected ? 'פנוי/ה (בטל)' : 'לא פנוי/ה (הוסף)'}`}>
                                             </td>
                                         );
-Vertical-Align: middle;
+                                        // --- !!! התיקון: הסרת שורת ה-CSS השגויה !!! ---
                                     })}
                                 </tr>
                             ))}
