@@ -1,4 +1,4 @@
-// src/components/ActionModal.jsx - SECURED (Fixed .jsx import) fvgfsgfdgdfgdfgdfgdfgdfgdf
+// src/components/ActionModal.jsx - SECURED (Fixed .jsx import
 import React, { useState, useEffect, useMemo } from 'react';
 import moment from 'moment';
 // --- !!! התיקון: הוספת סיומת .jsx לייבוא !!! ---
