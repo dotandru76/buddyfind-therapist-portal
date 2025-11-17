@@ -1,4 +1,4 @@
-// src/components/FlowBuilder.jsx - v4 (Node-RED Style)
+// src/components/FlowBuilder.jsx - v5 (Editable & Fixed Layout)
 import React, { useState, useCallback } from 'react';
 import ReactFlow, {
   Controls,
@@ -10,20 +10,22 @@ import ReactFlow, {
 } from 'reactflow';
 
 import { questionsTree } from '../constants/questionsTree';
-import QuestionNode from './QuestionNode.jsx'; // <-- !!! 1. ייבוא הרכיב החדש !!!
+import QuestionNode from './QuestionNode.jsx';
 
-// --- !!! 2. הגדרת סוגי הרכיבים המותאמים אישית !!! ---
-// אנחנו אומרים ל-React Flow: "כשאתה רואה 'type: questionNode',
-// תשתמש ברכיב שיצרנו"
+// הגדרת סוגי הרכיבים המותאמים אישית
 const nodeTypes = { 
   questionNode: QuestionNode 
 };
 
-// פונקציית המרה (עם עדכונים קלים)
-const convertTreeToFlow = (tree) => {
+// מיקום ברירת מחדל לתצוגה
+const defaultViewport = { x: 0, y: 0, zoom: 1 };
+
+// פונקציית המרה (עם עדכונים)
+const convertTreeToFlow = (tree, onNodeDataChange) => { // <-- 1. מקבל פונקציה
   const nodes = [];
   const edges = [];
   
+  // מיקומים חדשים ומסודרים
   const positions = {
     start: { x: 50, y: 200 },
     targetEntity: { x: 300, y: 100 },
@@ -37,9 +39,13 @@ const convertTreeToFlow = (tree) => {
   for (const [nodeId, nodeData] of Object.entries(tree)) {
     nodes.push({
       id: nodeId,
-      data: { label: nodeData.text }, 
+      // --- 2. מעביר את הפונקציה וה-ID לרכיב הבן ---
+      data: { 
+        label: nodeData.text,
+        onNodeDataChange: onNodeDataChange, // הפונקציה לעדכון
+        id: nodeId // המזהה של המלבן
+      }, 
       position: positions[nodeId] || { x: 100, y: 100 + nodes.length * 50 },
-      // --- !!! 3. שינוי סוג הרכיב !!! ---
       type: (nodeId === 'start') ? 'input' : 'questionNode',
     });
   }
@@ -81,16 +87,41 @@ const convertTreeToFlow = (tree) => {
   return { initialNodes: nodes, initialEdges: edges };
 };
 
-
-const { initialNodes, initialEdges } = convertTreeToFlow(questionsTree);
-
 const flowStyles = { height: '700px', border: '1px solid #ddd', borderRadius: '8px', background: '#fefefe' };
 
 function FlowBuilder() {
-  const [nodes, setNodes] = useState(initialNodes);
-  const [edges, setEdges] = useState(initialEdges);
-  const [nodeId, setNodeId] = useState(Object.keys(questionsTree).length + 1);
+  const [nodes, setNodes] = useState([]);
+  const [edges, setEdges] = useState([]);
+  const [nodeId, setNodeId] = useState(1); // יתעדכן אחרי הטעינה
 
+  // --- 3. פונקציה חדשה שמעדכנת את הטקסט במלבן ---
+  const onNodeDataChange = useCallback((id, newData) => {
+    setNodes((nds) =>
+      nds.map((node) => {
+        if (node.id === id) {
+          // יוצר אובייקט node חדש עם ה-data המעודכן
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              ...newData,
+            },
+          };
+        }
+        return node;
+      })
+    );
+  }, [setNodes]);
+  
+  // טעינה ראשונית של התרשים מהקובץ
+  useEffect(() => {
+    const { initialNodes, initialEdges } = convertTreeToFlow(questionsTree, onNodeDataChange);
+    setNodes(initialNodes);
+    setEdges(initialEdges);
+    setNodeId(initialNodes.length + 1);
+  }, [onNodeDataChange]); // <-- הוספנו תלות
+
+  // פונקציות בסיסיות של React Flow (גרירה, מחיקה)
   const onNodesChange = useCallback(
     (changes) => setNodes((nds) => applyNodeChanges(changes, nds)),
     [setNodes]
@@ -100,6 +131,7 @@ function FlowBuilder() {
     [setEdges]
   );
   
+  // פונקציה לחיבור בין מלבנים
   const onConnect = useCallback(
     (connection) => {
       const newEdge = { 
@@ -112,17 +144,24 @@ function FlowBuilder() {
     [setEdges]
   );
 
+  // הוספת מלבן שאלה חדש
   const addNode = () => {
+    const newId = `new_${nodeId}`;
     const newNode = {
-      id: `new_${nodeId}`,
-      data: { label: `שאלה חדשה ${nodeId}` },
+      id: newId,
+      data: { 
+        label: `שאלה חדשה ${nodeId}`,
+        onNodeDataChange: onNodeDataChange, // העבר את הפונקציה גם למלבן החדש
+        id: newId
+      },
       position: { x: 50, y: 50 },
-      type: 'questionNode' // הוספת סוג הרכיב החדש
+      type: 'questionNode'
     };
     setNodes((nds) => nds.concat(newNode));
     setNodeId(nodeId + 1);
   };
   
+  // שמירה (עדיין מדפיס ל-Console)
   const onSave = () => {
     const flowData = {
       nodes: nodes.map(n => ({ id: n.id, data: n.data, position: n.position, type: n.type })),
@@ -160,8 +199,8 @@ function FlowBuilder() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          fitView
-          nodeTypes={nodeTypes} // <-- !!! 4. העברת סוגי הרכיבים החדשים !!!
+          nodeTypes={nodeTypes}
+          defaultViewport={defaultViewport} // <-- !!! תיקון: החלפנו את fitView בזה !!!
         >
           <Controls />
           <Background />
