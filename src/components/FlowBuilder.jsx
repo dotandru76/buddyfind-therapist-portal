@@ -1,5 +1,5 @@
-// src/components/FlowBuilder.jsx - v5 (Editable & Fixed Layout)
-import React, { useState, useCallback } from 'react';
+// src/components/FlowBuilder.jsx - v6 (Fixed useEffect import)
+import React, { useState, useCallback, useEffect } from 'react'; // <-- !!! התיקון כאן !!!
 import ReactFlow, {
   Controls,
   Background,
@@ -20,12 +20,11 @@ const nodeTypes = {
 // מיקום ברירת מחדל לתצוגה
 const defaultViewport = { x: 0, y: 0, zoom: 1 };
 
-// פונקציית המרה (עם עדכונים)
-const convertTreeToFlow = (tree, onNodeDataChange) => { // <-- 1. מקבל פונקציה
+// פונקציית המרה
+const convertTreeToFlow = (tree, onNodeDataChange) => {
   const nodes = [];
   const edges = [];
   
-  // מיקומים חדשים ומסודרים
   const positions = {
     start: { x: 50, y: 200 },
     targetEntity: { x: 300, y: 100 },
@@ -39,18 +38,17 @@ const convertTreeToFlow = (tree, onNodeDataChange) => { // <-- 1. מקבל פו�
   for (const [nodeId, nodeData] of Object.entries(tree)) {
     nodes.push({
       id: nodeId,
-      // --- 2. מעביר את הפונקציה וה-ID לרכיב הבן ---
       data: { 
         label: nodeData.text,
-        onNodeDataChange: onNodeDataChange, // הפונקציה לעדכון
-        id: nodeId // המזהה של המלבן
+        onNodeDataChange: onNodeDataChange,
+        id: nodeId 
       }, 
       position: positions[nodeId] || { x: 100, y: 100 + nodes.length * 50 },
       type: (nodeId === 'start') ? 'input' : 'questionNode',
     });
   }
 
-  // יצירת החיצים (Edges) - ללא שינוי
+  // יצירת החיצים (Edges)
   edges.push({
     id: 'start-to-targetEntity', source: 'start', target: 'targetEntity', label: "אם 'נפש' (2)",
     markerEnd: { type: MarkerType.ArrowClosed },
@@ -92,14 +90,12 @@ const flowStyles = { height: '700px', border: '1px solid #ddd', borderRadius: '8
 function FlowBuilder() {
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
-  const [nodeId, setNodeId] = useState(1); // יתעדכן אחרי הטעינה
+  const [nodeId, setNodeId] = useState(1); 
 
-  // --- 3. פונקציה חדשה שמעדכנת את הטקסט במלבן ---
   const onNodeDataChange = useCallback((id, newData) => {
     setNodes((nds) =>
       nds.map((node) => {
         if (node.id === id) {
-          // יוצר אובייקט node חדש עם ה-data המעודכן
           return {
             ...node,
             data: {
@@ -113,15 +109,13 @@ function FlowBuilder() {
     );
   }, [setNodes]);
   
-  // טעינה ראשונית של התרשים מהקובץ
   useEffect(() => {
     const { initialNodes, initialEdges } = convertTreeToFlow(questionsTree, onNodeDataChange);
     setNodes(initialNodes);
     setEdges(initialEdges);
     setNodeId(initialNodes.length + 1);
-  }, [onNodeDataChange]); // <-- הוספנו תלות
+  }, [onNodeDataChange]); 
 
-  // פונקציות בסיסיות של React Flow (גרירה, מחיקה)
   const onNodesChange = useCallback(
     (changes) => setNodes((nds) => applyNodeChanges(changes, nds)),
     [setNodes]
@@ -131,7 +125,6 @@ function FlowBuilder() {
     [setEdges]
   );
   
-  // פונקציה לחיבור בין מלבנים
   const onConnect = useCallback(
     (connection) => {
       const newEdge = { 
@@ -144,14 +137,13 @@ function FlowBuilder() {
     [setEdges]
   );
 
-  // הוספת מלבן שאלה חדש
   const addNode = () => {
     const newId = `new_${nodeId}`;
     const newNode = {
       id: newId,
       data: { 
         label: `שאלה חדשה ${nodeId}`,
-        onNodeDataChange: onNodeDataChange, // העבר את הפונקציה גם למלבן החדש
+        onNodeDataChange: onNodeDataChange,
         id: newId
       },
       position: { x: 50, y: 50 },
@@ -161,7 +153,6 @@ function FlowBuilder() {
     setNodeId(nodeId + 1);
   };
   
-  // שמירה (עדיין מדפיס ל-Console)
   const onSave = () => {
     const flowData = {
       nodes: nodes.map(n => ({ id: n.id, data: n.data, position: n.position, type: n.type })),
@@ -200,7 +191,7 @@ function FlowBuilder() {
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           nodeTypes={nodeTypes}
-          defaultViewport={defaultViewport} // <-- !!! תיקון: החלפנו את fitView בזה !!!
+          defaultViewport={defaultViewport}
         >
           <Controls />
           <Background />
