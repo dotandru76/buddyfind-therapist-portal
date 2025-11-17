@@ -1,4 +1,4 @@
-// src/components/FlowBuilder.jsx - v2 (Pre-populated)
+// src/components/FlowBuilder.jsx - v4 (Node-RED Style)
 import React, { useState, useCallback } from 'react';
 import ReactFlow, {
   Controls,
@@ -6,39 +6,45 @@ import ReactFlow, {
   applyNodeChanges,
   applyEdgeChanges,
   addEdge,
-  MarkerType, // ייבוא לסוגי חיצים
+  MarkerType,
 } from 'reactflow';
 
-// --- !!! 1. ייבוא עץ השאלות הקיים שלך !!! ---
 import { questionsTree } from '../constants/questionsTree';
+import QuestionNode from './QuestionNode.jsx'; // <-- !!! 1. ייבוא הרכיב החדש !!!
 
-// --- !!! 2. פונקציית עזר חדשה להמרת העץ לתרשים זרימה !!! ---
+// --- !!! 2. הגדרת סוגי הרכיבים המותאמים אישית !!! ---
+// אנחנו אומרים ל-React Flow: "כשאתה רואה 'type: questionNode',
+// תשתמש ברכיב שיצרנו"
+const nodeTypes = { 
+  questionNode: QuestionNode 
+};
+
+// פונקציית המרה (עם עדכונים קלים)
 const convertTreeToFlow = (tree) => {
   const nodes = [];
   const edges = [];
-  // מיקום התחלתי אוטומטי
+  
   const positions = {
-    start: { x: 50, y: 50 },
-    targetEntity: { x: 300, y: 0 },
-    audience: { x: 300, y: 150 },
-    profession: { x: 550, y: 150 },
+    start: { x: 50, y: 200 },
+    targetEntity: { x: 300, y: 100 },
+    audience: { x: 300, y: 300 },
+    profession: { x: 550, y: 200 },
     symptoms: { x: 800, y: 100 },
-    preferences: { x: 800, y: 250 },
-    region: { x: 1050, y: 250 },
+    preferences: { x: 800, y: 300 },
+    region: { x: 1050, y: 200 },
   };
 
-  // יצירת המלבנים (Nodes)
   for (const [nodeId, nodeData] of Object.entries(tree)) {
     nodes.push({
       id: nodeId,
-      data: { label: `${nodeId}: ${nodeData.text}` },
+      data: { label: nodeData.text }, 
       position: positions[nodeId] || { x: 100, y: 100 + nodes.length * 50 },
-      type: (nodeId === 'start') ? 'input' : 'default',
+      // --- !!! 3. שינוי סוג הרכיב !!! ---
+      type: (nodeId === 'start') ? 'input' : 'questionNode',
     });
   }
 
-  // יצירת החיצים (Edges) על בסיס הלוגיקה
-  // (זוהי המרה פשוטה שמייצגת את הלוגיקה הקיימת שלך)
+  // יצירת החיצים (Edges) - ללא שינוי
   edges.push({
     id: 'start-to-targetEntity', source: 'start', target: 'targetEntity', label: "אם 'נפש' (2)",
     markerEnd: { type: MarkerType.ArrowClosed },
@@ -74,10 +80,8 @@ const convertTreeToFlow = (tree) => {
 
   return { initialNodes: nodes, initialEdges: edges };
 };
-// --- !!! סוף פונקציית העזר ---
 
 
-// --- 3. יצירת הנתונים הראשוניים מהקובץ שלך ---
 const { initialNodes, initialEdges } = convertTreeToFlow(questionsTree);
 
 const flowStyles = { height: '700px', border: '1px solid #ddd', borderRadius: '8px', background: '#fefefe' };
@@ -85,7 +89,6 @@ const flowStyles = { height: '700px', border: '1px solid #ddd', borderRadius: '8
 function FlowBuilder() {
   const [nodes, setNodes] = useState(initialNodes);
   const [edges, setEdges] = useState(initialEdges);
-  // מונה לשאלות חדשות
   const [nodeId, setNodeId] = useState(Object.keys(questionsTree).length + 1);
 
   const onNodesChange = useCallback(
@@ -97,12 +100,10 @@ function FlowBuilder() {
     [setEdges]
   );
   
-  // פונקציה שמאפשרת לחבר בין מלבנים
   const onConnect = useCallback(
     (connection) => {
       const newEdge = { 
         ...connection, 
-        // אפשר להוסיף לוגיקה שתשאל מה התנאי לחיבור
         labelText: prompt('מה התנאי למעבר? (למשל: "תשובה=כן")'),
         markerEnd: { type: MarkerType.ArrowClosed }
       };
@@ -111,18 +112,17 @@ function FlowBuilder() {
     [setEdges]
   );
 
-  // פונקציה להוספת שאלה חדשה (ריקה)
   const addNode = () => {
     const newNode = {
       id: `new_${nodeId}`,
       data: { label: `שאלה חדשה ${nodeId}` },
-      position: { x: 50, y: 50 }, // מיקום התחלתי
+      position: { x: 50, y: 50 },
+      type: 'questionNode' // הוספת סוג הרכיב החדש
     };
     setNodes((nds) => nds.concat(newNode));
     setNodeId(nodeId + 1);
   };
   
-  // פונקציה לשמירה (כרגע רק מדפיסה ל-Console)
   const onSave = () => {
     const flowData = {
       nodes: nodes.map(n => ({ id: n.id, data: n.data, position: n.position, type: n.type })),
@@ -160,7 +160,8 @@ function FlowBuilder() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          fitView // ממקם את התרשים יפה במרכז
+          fitView
+          nodeTypes={nodeTypes} // <-- !!! 4. העברת סוגי הרכיבים החדשים !!!
         >
           <Controls />
           <Background />
