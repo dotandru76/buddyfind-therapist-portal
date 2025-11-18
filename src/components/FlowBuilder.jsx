@@ -1,4 +1,4 @@
-// src/components/FlowBuilder.jsx - v21 (Clean Lines & Uniform Style)
+// src/components/FlowBuilder.jsx - v21 (Domain-Specific Profession Split)
 import React, { useState, useCallback, useEffect } from 'react';
 import ReactFlow, {
   Controls,
@@ -16,93 +16,125 @@ import { questionsTree } from '../constants/questionsTree.js';
 import QuestionNode from './QuestionNode.jsx';
 
 const nodeTypes = { questionNode: QuestionNode };
-const defaultViewport = { x: 0, y: 0, zoom: 0.6 }; 
-const flowStyles = { height: '750px', border: '1px solid #e2e8f0', borderRadius: '12px', background: '#f1f5f9' };
+const defaultViewport = { x: 0, y: 0, zoom: 0.55 }; // זום רחב יותר
+const flowStyles = { height: '750px', border: '1px solid #e2e8f0', borderRadius: '12px', background: '#f8fafc' };
 
-// --- פונקציית המרה ---
+// --- פונקציית המרה חכמה ומפוצלת ---
 const convertTreeToFlow = (tree, initialData) => {
   const nodes = [];
   const edges = [];
 
-  // סגנון אחיד לכל הקווים
-  const edgeStyle = { stroke: '#94a3b8', strokeWidth: 2 };
-
-  // פונקציית עזר ליצירת קו נקי
   const addEdgeClean = (source, target, sourceHandle = null, label = '') => {
     edges.push({
       id: `e_${source}-${target}_${sourceHandle || 'def'}`,
       source, target, sourceHandle: sourceHandle ? String(sourceHandle) : null, label,
-      type: 'smoothstep', 
-      markerEnd: { type: MarkerType.ArrowClosed }, 
-      style: edgeStyle
+      type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: '#94a3b8', strokeWidth: 2 }
     });
   };
 
-  // --- 1. שאלות בסיס ---
-  
+  // 1. התחלה (בחירת תחום)
   nodes.push({
     id: 'start', type: 'questionNode', position: { x: 50, y: 300 },
     data: { 
-        label: 'מהו תחום הטיפול העיקרי?', 
-        questionType: 'single',
+        label: 'מהו תחום הטיפול העיקרי?', questionType: 'single',
         outputs: initialData.mainCategories.map(c => ({ id: c.id, label: c.name }))
     },
   });
 
+  // 2. שאלות ביניים (קהל יעד וגיל)
+  // נמקם אותם במרכז, אבל החיבורים יהיו חכמים
   nodes.push({
-    id: 'targetEntity', type: 'questionNode', position: { x: 500, y: 50 },
+    id: 'targetEntity', type: 'questionNode', position: { x: 450, y: 50 },
     data: { label: 'עבור מי הטיפול?', questionType: 'single', outputs: tree.targetEntity.options },
   });
 
   nodes.push({
-    id: 'audience', type: 'questionNode', position: { x: 500, y: 450 },
+    id: 'audience', type: 'questionNode', position: { x: 450, y: 450 },
     data: { 
-        label: 'מהו גיל המטופל?', 
-        questionType: 'slider', 
-        minVal: 0, maxVal: 120,
-        outputs: [{id: 'default', label: 'הבא'}] 
-    },
-  });
-  
-  nodes.push({
-    id: 'profession', type: 'questionNode', position: { x: 900, y: 300 },
-    data: { 
-        label: 'בחירת מקצוע מטפל', 
-        questionType: 'single',
-        outputs: initialData.professions.map(p => ({ id: p.id, label: p.name })) 
+        label: 'מהו גיל המטופל?', questionType: 'slider', 
+        minVal: 0, maxVal: 120, outputs: [{id: 'default', label: 'הבא'}] 
     },
   });
 
-  // חיבורים
-  addEdgeClean('start', 'targetEntity', 2, 'נפש'); 
-  initialData.mainCategories.forEach(c => { if (c.id !== 2) addEdgeClean('start', 'audience', c.id); });
-  
+  // חיבורים ראשוניים
+  // קטגוריה 2 (נפש) הולכת ל'עבור מי' ואז ל'גיל'
+  addEdgeClean('start', 'targetEntity', 2, 'נפש');
   addEdgeClean('targetEntity', 'audience', 'individual');
   addEdgeClean('targetEntity', 'audience', 'couple');
   addEdgeClean('targetEntity', 'audience', 'family');
   addEdgeClean('targetEntity', 'audience', 'group');
-  addEdgeClean('audience', 'profession', 'default');
+
+  // שאר הקטגוריות הולכות ישר ל'גיל'
+  initialData.mainCategories.forEach(c => { 
+      if (c.id !== 2) addEdgeClean('start', 'audience', c.id, c.name); 
+  });
 
 
-  // --- 2. הפיצול הגדול: סימפטומים לפי מקצוע ---
+  // --- 3. הפיצול הגדול: יצירת מלבן "מקצועות" נפרד לכל קטגוריה ---
+  
+  // נשתמש במפה כדי לזכור איזה מלבן מקצועות שייך לאיזה ID של מקצוע
+  // כדי שנוכל לחבר את הסימפטומים אחר כך
+  const professionNodeMap = {}; 
+
+  let currentY_Prof = 0;
+  const SPACING_Y_PROF = 400;
+
+  initialData.mainCategories.forEach((category, index) => {
+      // סינון המקצועות ששייכים לקטגוריה זו בלבד
+      const catProfessions = initialData.professions.filter(p => p.main_category_id === category.id);
+      
+      if (catProfessions.length > 0) {
+          const profNodeId = `professions_cat_${category.id}`;
+          
+          nodes.push({
+              id: profNodeId,
+              type: 'questionNode',
+              position: { x: 900, y: currentY_Prof },
+              data: { 
+                  label: `מקצועות: ${category.name}`, // כותרת ברורה
+                  questionType: 'single',
+                  outputs: catProfessions.map(p => ({ id: p.id, label: p.name })) 
+              },
+          });
+
+          // חיבור ה"גיל" למלבן המקצועות המתאים
+          // הערה: בתרשים ליניארי פשוט זה קשה לייצג את הפיצול המדויק של "אם בחרת X ב-Start תגיע לפה",
+          // אז לצורך הוויזואליזציה נחבר את כולם מ"גיל".
+          // במערכת האמיתית השרת ידע לנתב לפי הבחירה הראשונה.
+          addEdgeClean('audience', profNodeId, 'default');
+
+          // שמירת המיפוי לשימוש בשלב הסימפטומים
+          catProfessions.forEach(p => {
+              professionNodeMap[p.id] = profNodeId;
+          });
+
+          currentY_Prof += SPACING_Y_PROF;
+      }
+  });
+
+
+  // --- 4. פיצול סימפטומים (מחובר למלבן המקצועות הנכון) ---
   
   const preferencesNodeId = 'preferences';
   const regionNodeId = 'region';
-  let currentY = 0;
-  const SPACING_Y = 350; 
+  let currentY_Sym = 0;
+  const SPACING_Y_SYM = 350;
 
   initialData.professions.forEach((prof) => {
       const profSymptoms = initialData.symptoms
           .filter(s => s.profession_id === prof.id)
           .map(s => ({ id: s.search_key, label: s.name }));
 
-      if (profSymptoms.length > 0) {
-          // יש סימפטומים - צור מלבן
+      // מציאת מלבן המקצועות שממנו יוצאים (לפי המפה שיצרנו קודם)
+      const sourceNodeId = professionNodeMap[prof.id];
+
+      if (profSymptoms.length > 0 && sourceNodeId) {
           const symNodeId = `symptoms_prof_${prof.id}`;
+          
           nodes.push({
               id: symNodeId,
               type: 'questionNode',
-              position: { x: 1400, y: currentY },
+              position: { x: 1400, y: currentY_Sym },
               data: { 
                   label: `סימפטומים: ${prof.name}`, 
                   questionType: 'multiple',
@@ -110,28 +142,28 @@ const convertTreeToFlow = (tree, initialData) => {
               },
           });
 
-          // חבר מקצוע -> סימפטומים
-          addEdgeClean('profession', symNodeId, prof.id);
+          // חיבור: ממלבן המקצועות הספציפי -> לצומת הסימפטומים
+          addEdgeClean(sourceNodeId, symNodeId, prof.id);
           
-          // חבר סימפטומים -> העדפות
+          // חיבור: מסימפטומים -> להעדפות
           addEdgeClean(symNodeId, preferencesNodeId, 'next');
 
-          currentY += SPACING_Y; 
-      } else {
-          // --- !!! התיקון: קו רגיל לדילוג (במקום אדום) !!! ---
-          // אין סימפטומים - חבר ישירות מקצוע -> העדפות
+          currentY_Sym += SPACING_Y_SYM; 
+      } else if (sourceNodeId) {
+          // דילוג: ממלבן המקצועות -> להעדפות
           edges.push({
             id: `e_skip_${prof.id}`,
-            source: 'profession', sourceHandle: String(prof.id), target: preferencesNodeId,
-            label: '(ללא סימפטומים)',
+            source: sourceNodeId, sourceHandle: String(prof.id), target: preferencesNodeId,
+            label: '',
             type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed }, 
-            style: edgeStyle // שימוש בסגנון האחיד
+            style: { stroke: '#94a3b8', strokeWidth: 2 }
           });
       }
   });
 
-  // --- 3. סיום ---
-  const centerY = Math.max(currentY / 2, 300);
+  // --- 5. סיום ---
+  const centerY = Math.max(currentY_Sym / 2, 300);
+  
   nodes.push({
     id: preferencesNodeId, type: 'questionNode', position: { x: 1900, y: centerY },
     data: { 
@@ -154,7 +186,7 @@ const convertTreeToFlow = (tree, initialData) => {
 };
 
 
-// --- רכיב חלון העריכה ---
+// --- רכיב חלון העריכה (ללא שינוי) ---
 const NodeInspector = ({ node, setNodes, setEdges }) => {
   const [label, setLabel] = useState(node.data.label);
   const [questionType, setQuestionType] = useState(node.data.questionType || 'single');
@@ -175,23 +207,10 @@ const NodeInspector = ({ node, setNodes, setEdges }) => {
   };
 
   const updateOutputLabel = (index, newLabel) => {
-    const oldId = outputs[index].id; 
-    const newOutputs = outputs.map((out, i) => i === index ? { ...out, label: newLabel } : out);
+    const newOutputs = [...outputs];
+    newOutputs[index] = { ...newOutputs[index], label: newLabel };
     setOutputs(newOutputs);
-    
-    setNodes(nds => nds.map(n => {
-      if (n.id === node.id) {
-        return { ...n, data: { ...n.data, outputs: newOutputs } };
-      }
-      return n;
-    }));
-
-    setEdges(eds => eds.map(e => {
-        if (e.source === node.id && e.sourceHandle === oldId) {
-            return { ...e, labelText: `מ-'${newLabel}'` };
-        }
-        return e;
-    }));
+    updateNodeData('outputs', newOutputs);
   };
   
   const addOutput = () => {
