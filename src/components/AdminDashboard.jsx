@@ -1,13 +1,15 @@
-// src/components/AdminDashboard.jsx
-// --- גרסה V8.0 (תמיכה בבורר מצבי אבחון) ---
-
+// src/components/AdminDashboard.jsx - SECURED (Cookie-based) & FIXED
 import React, { useState, useEffect, useCallback } from 'react';
 import moment from 'moment'; 
 import ActionModal from './ActionModal'; 
 import RegistrationsGraph from './RegistrationsGraph'; 
 import QuestionnaireManager from './QuestionnaireManager'; 
+import ProfessionManager from './ProfessionManager'; // לוודא שקיים
 
-// (רכיבי עזר פנימיים)
+// =================================================================
+// --- רכיבי עזר פנימיים ---
+// =================================================================
+
 const LoadingSpinner = () => (
     <div className="text-center p-5">
         <div className="spinner w-8 h-8 mx-auto border-t-primary-blue border-r-primary-blue"></div>
@@ -52,7 +54,7 @@ const ActionCard = ({ title, value, color, onClick }) => {
 };
 
 // --- רכיב ניהול הגדרות ---
-const SettingsManager = ({ authToken, API_URL, onBack }) => {
+const SettingsManager = ({ API_URL, onBack, onLogout }) => {
     const [settings, setSettings] = useState({});
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -62,8 +64,9 @@ const SettingsManager = ({ authToken, API_URL, onBack }) => {
     const fetchSettings = useCallback(async () => {
         setLoading(true); setError(null);
         try {
+            // --- תיקון אבטחה: שימוש ב-credentials ---
             const res = await fetch(`${API_URL}/api/admin/app-settings`, { 
-                headers: { 'Authorization': `Bearer ${authToken}` } 
+                credentials: 'include' 
             });
             if (!res.ok) throw new Error('שגיאה בטעינת הגדרות המערכת');
             const data = await res.json();
@@ -73,7 +76,7 @@ const SettingsManager = ({ authToken, API_URL, onBack }) => {
         } finally {
             setLoading(false);
         }
-    }, [authToken, API_URL]);
+    }, [API_URL]);
 
     useEffect(() => {
         fetchSettings();
@@ -90,14 +93,18 @@ const SettingsManager = ({ authToken, API_URL, onBack }) => {
         }
 
         try {
+            // --- תיקון אבטחה: שימוש ב-credentials ---
             const res = await fetch(`${API_URL}/api/admin/app-settings/${key}`, { 
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify({ value: value.toString() })
             });
+            
+            if (res.status === 401 || res.status === 403) { onLogout(); return; }
             if (!res.ok) throw new Error('שגיאה בעדכון ההגדרה');
+            
             setMessage('✅ ההגדרה עודכנה בהצלחה!');
-            // עדכון הסטייט המקומי אם צריך
             if (explicitValue !== null) {
                 setSettings(prev => ({ ...prev, [key]: explicitValue }));
             }
@@ -124,7 +131,7 @@ const SettingsManager = ({ authToken, API_URL, onBack }) => {
 
             <div className="space-y-6">
                 
-                {/* --- !!! הוספה חדשה: בורר מצב אבחון !!! --- */}
+                {/* בורר מצב אבחון */}
                 <div className="p-4 border border-blue-200 bg-blue-50 rounded-lg flex justify-between items-center">
                     <div className="flex-1 ml-4">
                         <h4 className="font-bold text-blue-800 text-lg">מצב מערכת אבחון</h4>
@@ -155,8 +162,6 @@ const SettingsManager = ({ authToken, API_URL, onBack }) => {
                         </button>
                     </div>
                 </div>
-                {/* --- סוף הוספה --- */}
-
 
                 {/* הגדרת ימי ההמתנה לשליחת שאלון */}
                 <div className="p-4 border border-gray-200 rounded-lg flex justify-between items-center">
@@ -232,7 +237,8 @@ const DataModal = ({ title, data, headers, keys, onClose, error }) => {
 // --- הרכיב הראשי: AdminDashboard ---
 // =================================================================
 
-const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
+// --- תיקון: הסרת authToken מה-props ---
+const AdminDashboard = ({ API_URL, user, onLogout }) => {
     const [stats, setStats] = useState({ 
         totalUsers: 0, 
         totalProfessionals: 0, 
@@ -252,11 +258,12 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
     const fetchAdminStats = useCallback(async () => {
         setLoading(true); setError(null);
         try {
+            // --- תיקון אבטחה: שימוש ב-credentials ---
             const statsRes = await fetch(`${API_URL}/api/admin/stats`, { 
-                headers: { 'Authorization': `Bearer ${authToken}` } 
+                credentials: 'include' 
             });
             if (!statsRes.ok) {
-                 if (statsRes.status === 403) onLogout();
+                 if (statsRes.status === 401 || statsRes.status === 403) onLogout();
                  throw new Error('שגיאה בטעינת נתונים סטטיסטיים.');
             }
             const data = await statsRes.json();
@@ -266,7 +273,7 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
         } finally {
             setLoading(false);
         }
-    }, [authToken, API_URL, onLogout]);
+    }, [API_URL, onLogout]);
 
     useEffect(() => {
         fetchAdminStats();
@@ -290,6 +297,7 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
 
             {adminView === 'main' ? (
                 <>
+                    {/* 1. רכיבי הפעולה - 5 כרטיסיות */}
                     <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
                         <ActionCard title="חוות דעת ממתינות" value={stats.totalPendingReviews} color="yellow" onClick={() => handleActionCardClick('reviews')} />
                         <ActionCard title="ערעורים לטיפול" value={stats.totalDisputedReviews} color="red" onClick={() => handleActionCardClick('disputed')} />
@@ -298,29 +306,54 @@ const AdminDashboard = ({ authToken, API_URL, user, onLogout }) => {
                         <ActionCard title="ניהול שאלונים" value="+" color="purple" onClick={() => setAdminView('questionnaires')} />
                     </div>
                     
+                    {/* 3. אזור הגרפים */}
                     <div className="p-6 bg-white rounded-lg shadow">
                         <h3 className="text-xl font-bold text-text-dark mb-4 border-b pb-2">נרשמים חדשים (30 יום אחרונים)</h3>
-                        <RegistrationsGraph authToken={authToken} API_URL={API_URL} />
+                        {/* --- תיקון: העברת props נכונים ל-RegistrationsGraph --- */}
+                        <RegistrationsGraph onLogout={onLogout} API_URL={API_URL} />
                     </div>
                     
+                    {/* 4. ניהול הגדרות */}
                     <div className="p-6 bg-white rounded-lg shadow space-y-6">
                         <h3 className="text-xl font-bold text-text-dark border-b pb-2">הגדרות מערכת</h3>
                          <button onClick={() => setAdminView('settings')} className="py-2 px-4 bg-gray-500 text-white rounded-lg text-sm font-semibold hover:bg-gray-600 transition">
                             ⚙️ ערוך הגדרות אוטומציה ומצב אבחון
                         </button>
                     </div>
+
                 </>
             ) : adminView === 'questionnaires' ? (
-                <QuestionnaireManager authToken={authToken} API_URL={API_URL} onBack={() => setAdminView('main')} />
+                <QuestionnaireManager 
+                    onLogout={onLogout} 
+                    API_URL={API_URL} 
+                    onBack={() => setAdminView('main')} 
+                />
             ) : adminView === 'settings' ? (
-                <SettingsManager authToken={authToken} API_URL={API_URL} onBack={() => setAdminView('main')} />
+                <SettingsManager 
+                    onLogout={onLogout} 
+                    API_URL={API_URL} 
+                    onBack={() => setAdminView('main')}
+                />
             ) : null}
             
             {currentModal === 'data' && modalData && (
-                <DataModal title={modalData.title} data={modalData.data} headers={modalData.headers} keys={modalData.keys} onClose={() => setCurrentModal(null)} error={modalData.error} />
+                <DataModal
+                    title={modalData.title}
+                    data={modalData.data}
+                    headers={modalData.headers}
+                    keys={modalData.keys}
+                    onClose={() => setCurrentModal(null)}
+                    error={modalData.error}
+                />
             )}
              {['reviews', 'disputed', 'professionals', 'users'].includes(currentModal) && (
-                 <ActionModal modalType={currentModal} authToken={authToken} API_URL={API_URL} onClose={() => setCurrentModal(null)} onActionComplete={handleActionComplete} />
+                 <ActionModal
+                    modalType={currentModal}
+                    onLogout={onLogout} // --- תיקון: העברת onLogout ---
+                    API_URL={API_URL}
+                    onClose={() => setCurrentModal(null)}
+                    onActionComplete={handleActionComplete}
+                />
             )}
         </div>
     );
