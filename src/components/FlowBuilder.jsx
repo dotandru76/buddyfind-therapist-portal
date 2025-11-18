@@ -1,4 +1,4 @@
-// src/components/FlowBuilder.jsx - v12 (Fixes Deletion & All Options)
+// src/components/FlowBuilder.jsx - v13 (FIXED API Endpoint for options)
 import React, { useState, useCallback, useEffect } from 'react';
 import ReactFlow, {
   Controls,
@@ -8,7 +8,7 @@ import ReactFlow, {
   addEdge,
   MarkerType,
   useReactFlow,
-  ReactFlowProvider, // ייבוא תקין
+  ReactFlowProvider,
 } from 'reactflow';
 import 'reactflow/dist/style.css'; 
 
@@ -19,7 +19,7 @@ const nodeTypes = { questionNode: QuestionNode };
 const defaultViewport = { x: 0, y: 0, zoom: 1 };
 const flowStyles = { height: '700px', border: '1px solid #ddd', borderRadius: '8px', background: '#fefefe' };
 
-// --- פונקציית המרה משודרגת (מקבלת initialData) ---
+// --- פונקציית המרה משודרגת ---
 const convertTreeToFlow = (tree, initialData) => {
   const nodes = [];
   const edges = [];
@@ -35,47 +35,43 @@ const convertTreeToFlow = (tree, initialData) => {
   };
 
   const getOutputsForNode = (nodeId, nodeData) => {
-    // --- !!! 1. לוגיקה חדשה ונכונה להצגת תשובות !!! ---
+    // --- לוגיקה משופרת להצגת תשובות ---
     if (nodeData.optionsKey) {
-        // Case 1: Static optionsKey (e.g., 'mainCategories', 'regions')
-        if (typeof nodeData.optionsKey === 'string') {
-          const dataKey = nodeData.optionsKey; // 'mainCategories'
-          if (initialData && initialData[dataKey]) {
-            return initialData[dataKey].map(opt => ({
-              id: opt.id || opt.region_key, // טיפול במקרה של 'regions'
-              label: opt.name || opt.region_name_he // טיפול במקרה של 'regions'
-            }));
-          }
-          return [{ id: 'loading', label: 'טוען...' }]; // Fallback
-        }
-        
-        // Case 2: Dynamic optionsKey (e.g., profession, symptoms)
         if (typeof nodeData.optionsKey === 'function') {
-          return [{ id: 'dynamic_output', label: '(תשובות דינמיות - תלוי בחירה)' }];
+            const mockAnswers = { mainCategory: 2 }; 
+            const dynamicOptions = nodeData.optionsKey(mockAnswers, initialData);
+            if (dynamicOptions && dynamicOptions.length > 0) {
+                 return dynamicOptions.map(opt => ({ id: opt.value, label: opt.label }));
+            }
+            return [{ id: 'dynamic_output', label: '(תשובות דינמיות)' }];
+        }
+        const dataKey = nodeData.optionsKey; // e.g., 'mainCategories'
+        if (initialData && initialData[dataKey]) {
+            return initialData[dataKey].map(opt => ({
+                id: opt.id || opt.region_key,
+                label: opt.name || opt.region_name_he
+            }));
         }
     }
-    // Case 3: Hardcoded options (e.g., targetEntity, preferences)
     if (nodeData.options) {
       return nodeData.options.map(opt => ({ id: opt.value, label: opt.label }));
     }
-    // Case 4: No options (e.g., audience)
     return [{ id: 'default', label: 'המשך' }];
   };
-  // --- !!! סוף התיקון ---
 
   for (const [nodeId, nodeData] of Object.entries(tree)) {
     nodes.push({
       id: nodeId,
       data: { 
         label: nodeData.text,
-        outputs: getOutputsForNode(nodeId, nodeData), // קריאה לפונקציה החדשה
+        outputs: getOutputsForNode(nodeId, nodeData),
       }, 
       position: positions[nodeId] || { x: 100, y: 100 + nodes.length * 50 },
       type: 'questionNode',
     });
   }
 
-  // --- !!! 2. חיצים מתוקנים עם מזהי הידיות הנכונים !!! ---
+  // יצירת החיצים (Edges)
   edges.push({
     id: 'start-to-targetEntity', source: 'start', sourceHandle: 2, target: 'targetEntity', 
     labelText: "טיפולים רגשיים (ID: 2)", markerEnd: { type: MarkerType.ArrowClosed },
@@ -86,7 +82,7 @@ const convertTreeToFlow = (tree, initialData) => {
   });
   edges.push({
     id: 'start-to-audience-3', source: 'start', sourceHandle: 3, target: 'audience', 
-    labelText: 'שפה ותזונה (ID: 3)', markerEnd: { type: MarkerType.ArrowClosed },
+    labelText: 'שפה (ID: 3)', markerEnd: { type: MarkerType.ArrowClosed },
   });
   edges.push({
     id: 'start-to-audience-4', source: 'start', sourceHandle: 4, target: 'audience', 
@@ -106,14 +102,14 @@ const convertTreeToFlow = (tree, initialData) => {
     markerEnd: { type: MarkerType.ArrowClosed },
   });
   
-  // חיבור דינמי
+  // (נשאיר את זה כחיבור דינמי יחיד, כי התשובות כאן תלויות בבחירה הקודמת)
   edges.push({
     id: 'profession-to-symptoms', source: 'profession', sourceHandle: 'dynamic_output', target: 'symptoms', 
     labelText: 'רגיל', markerEnd: { type: MarkerType.ArrowClosed },
   });
    edges.push({
     id: 'profession-to-preferences', source: 'profession', sourceHandle: 'dynamic_output', target: 'preferences', 
-    labelText: 'דילוג (4,5,6)', markerEnd: { type: MarkerType.ArrowClosed },
+    labelText: 'דילוג', markerEnd: { type: MarkerType.ArrowClosed },
   });
 
   edges.push({
@@ -148,7 +144,7 @@ const NodeInspector = ({ node, setNodes, setEdges }) => {
   };
 
   const updateOutputLabel = (index, newLabel) => {
-    const oldId = outputs[index].id; // שמור את המזהה הישן
+    const oldId = outputs[index].id;
     const newOutputs = outputs.map((out, i) => i === index ? { ...out, label: newLabel } : out);
     setOutputs(newOutputs);
     
@@ -159,10 +155,8 @@ const NodeInspector = ({ node, setNodes, setEdges }) => {
       return n;
     }));
 
-    // עדכון החיצים שיוצאים מהידית הזו
     setEdges(eds => eds.map(e => {
         if (e.source === node.id && e.sourceHandle === oldId) {
-            // שים לב: אנחנו לא משנים את sourceHandle, רק את התווית
             return { ...e, labelText: `מ-'${newLabel}'` };
         }
         return e;
@@ -183,7 +177,6 @@ const NodeInspector = ({ node, setNodes, setEdges }) => {
     setOutputs(newOutputs);
     
     setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, outputs: newOutputs } } : n));
-    // מחיקת כל החיצים המחוברים לידית זו
     setEdges(eds => eds.filter(e => !(e.source === node.id && e.sourceHandle === outputToRemove.id)));
   };
 
@@ -239,7 +232,8 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
   useEffect(() => {
     const fetchInitialData = async () => {
         try {
-            const res = await fetch(`${API_URL}/api/data/options`, { 
+            // --- !!! 3. התיקון הקריטי: קריאה לנתיב ה-API הנכון !!! ---
+            const res = await fetch(`${API_URL}/api/initial-data`, { 
                 credentials: 'include' 
             });
             if (res.status === 401 || res.status === 403) { onLogout(); return; }
@@ -279,7 +273,6 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
     [setEdges]
   );
   
-  // --- !!! 3. תיקון יכולת המחיקה !!! ---
   const onNodesDelete = useCallback(
     (deleted) => {
       setEdges((eds) =>
@@ -290,7 +283,6 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
     },
     [setNodes, setEdges]
   );
-  // --- סוף תיקון מחיקה ---
   
   const onConnect = useCallback(
     (connection) => {
@@ -372,13 +364,13 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
-            onNodesDelete={onNodesDelete} // --- 4. הוספנו האזנה למחיקה ---
+            onNodesDelete={onNodesDelete} 
             onConnect={onConnect}
             nodeTypes={nodeTypes}
             defaultViewport={defaultViewport}
             onNodeClick={onNodeClick}
             onPaneClick={() => setSelectedNode(null)} 
-            deleteKeyCode={['Backspace', 'Delete']} // --- 5. הפעלת מקש מחיקה ---
+            deleteKeyCode={['Backspace', 'Delete']} 
           >
             <Controls />
             <Background />
