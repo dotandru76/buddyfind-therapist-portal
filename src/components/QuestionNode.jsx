@@ -1,86 +1,88 @@
-// src/components/QuestionNode.jsx - (v5 - Show Outputs)
+// src/components/QuestionNode.jsx - (v6 - With Types)
 import React from 'react';
 import { Handle, Position } from 'reactflow';
 
-// עיצוב הידית (הנקודה האפורה)
-const handleStyle = {
-    background: '#fff',
-    border: '1px solid #777',
-    width: '10px',
-    height: '10px',
-};
-
-// עיצוב המלבן
 const nodeStyle = {
   background: 'white',
   border: '1px solid var(--primary-blue)',
-  borderRadius: '5px',
-  width: 200,
+  borderRadius: '8px',
+  width: 240,
   textAlign: 'right',
   direction: 'rtl',
-  boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+  overflow: 'hidden',
 };
 
 const nodeHeaderStyle = {
   background: 'var(--primary-blue)',
   color: 'white',
   padding: '8px 12px',
-  borderTopLeftRadius: '4px',
-  borderTopRightRadius: '4px',
   fontSize: '13px',
   fontWeight: '600',
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+};
+
+const typeBadgeStyle = {
+    fontSize: '10px',
+    background: 'rgba(255,255,255,0.2)',
+    padding: '2px 6px',
+    borderRadius: '4px',
+    marginLeft: '8px'
 };
 
 const nodeBodyStyle = {
-  padding: '10px 15px',
+  padding: '12px',
   fontSize: '12px',
+  background: '#f8fafc',
 };
 
-// רכיב התשובה (יציאה)
 const OutputHandle = ({ label, id }) => (
-  <div style={{ position: 'relative', padding: '5px 0', paddingRight: '15px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
-    {/* --- !!! התיקון: מציגים את הטקסט של התשובה --- */}
-    <span style={{ fontSize: '11px', color: '#333' }}>{label}</span>
-    
+  <div style={{ position: 'relative', padding: '6px 0', paddingRight: '12px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+    <span style={{ fontSize: '12px', color: '#334155' }}>{label}</span>
     <Handle 
       type="source" 
       position={Position.Right} 
-      id={id} // המזהה של הידית
-      style={{ ...handleStyle, right: '-6px', position: 'absolute', top: '50%' }}
+      id={id} 
+      style={{ background: '#3b82f6', width: '8px', height: '8px', right: '-5px' }}
     />
   </div>
 );
 
-// הרכיב המותאם אישית
 function QuestionNode({ data, selected }) {
-  
   const customNodeStyle = {
     ...nodeStyle,
     border: selected ? '2px solid #2563EB' : nodeStyle.border,
+    boxShadow: selected ? '0 0 0 4px rgba(59, 130, 246, 0.2)' : nodeStyle.boxShadow,
+  };
+
+  // תרגום סוג השאלה לעברית
+  const getTypeLabel = (type) => {
+      switch(type) {
+          case 'single': return 'בחירה יחידה ◉';
+          case 'multiple': return 'בחירה מרובה ☑';
+          case 'slider': return 'סליידר ⸏';
+          default: return 'כללי';
+      }
   };
 
   return (
     <div style={customNodeStyle}>
-      {/* 1. ידית כניסה (Target) בצד שמאל */}
       <Handle 
         type="target" 
         position={Position.Left} 
-        style={{ ...handleStyle, left: '-6px' }} 
+        style={{ background: '#64748b', width: '10px', height: '10px', left: '-6px' }} 
       />
       
-      {/* 2. כותרת (טקסט השאלה) */}
       <div style={nodeHeaderStyle}>
-        {data.label}
+        <span>{data.label}</span>
+        <span style={typeBadgeStyle}>{getTypeLabel(data.questionType)}</span>
       </div>
 
-      {/* 3. גוף (רשימת התשובות והיציאות) */}
       <div style={nodeBodyStyle}>
         {(data.outputs || []).map((output, index) => (
-          <OutputHandle 
-            key={index} 
-            label={output.label} // <-- מעבירים את הטקסט
-            id={output.id} // <-- מעבירים את המזהה
-          />
+          <OutputHandle key={index} label={output.label} id={output.id} />
         ))}
       </div>
     </div>
