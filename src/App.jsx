@@ -1,4 +1,4 @@
-// src/App.jsx (של buddyfind-therapist-portal) - הוספת onLogout
+// src/App.jsx (של buddyfind-therapist-portal) - הוספת מנהל נתונים
 import React, { useState, useEffect, useCallback } from 'react';
 import LoginModal from './components/LoginModal';
 import RegisterModal from './components/RegisterModal';
@@ -8,7 +8,8 @@ import AdminDashboard from './components/AdminDashboard';
 import LogContactForm from './components/LogContactForm'; 
 import LoadingSpinner from './components/LoadingSpinner';
 import AlertMessage from './components/AlertMessage';
-import FlowBuilder from './components/FlowBuilder'; // ייבוא עורך הזרימה
+import FlowBuilder from './components/FlowBuilder'; 
+import ProfessionManager from './components/ProfessionManager'; // <-- !!! 1. ייבוא הרכיב החדש !!!
 
 const API_URL = 'https://buddyfind-api.onrender.com';
 const LOGO_URL = 'https://res.cloudinary.com/dermarx8t/image/upload/v1761900572/WellMatch_logo_ktdyfy.png';
@@ -118,7 +119,17 @@ const App = () => {
                         onClick={() => setNav('admin')}
                         className={`py-4 px-2 text-sm font-semibold ${nav === 'admin' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}
                     >
-                        לוח בקרה (Admin)
+                        לוח בקרה
+                    </button>
+                )}
+
+                {/* --- !!! 2. הוספת הקישור החדש !!! --- */}
+                {isAdmin && (
+                    <button 
+                        onClick={() => setNav('data_manager')}
+                        className={`py-4 px-2 text-sm font-semibold ${nav === 'data_manager' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        ניהול נתונים (CMS)
                     </button>
                 )}
 
@@ -223,9 +234,16 @@ const App = () => {
                     />
                 )}
 
-                {/* --- !!! התיקון: העברת onLogout --- */}
                 {user.user_type === 'admin' && nav === 'flow_builder' && (
                      <FlowBuilder 
+                        API_URL={API_URL}
+                        onLogout={handleLogout}
+                     />
+                )}
+                
+                {/* --- !!! 3. הוספת הרכיב החדש !!! --- */}
+                {user.user_type === 'admin' && nav === 'data_manager' && (
+                     <ProfessionManager 
                         API_URL={API_URL}
                         onLogout={handleLogout}
                      />
