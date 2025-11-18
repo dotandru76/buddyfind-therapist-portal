@@ -1,4 +1,4 @@
-// src/components/FlowBuilder.jsx - v17 (Type Selection & Clean Lines)
+// src/components/FlowBuilder.jsx - v18 (Smart Symptom Split & Full Layout)
 import React, { useState, useCallback, useEffect } from 'react';
 import ReactFlow, {
   Controls,
@@ -16,94 +16,127 @@ import { questionsTree } from '../constants/questionsTree.js';
 import QuestionNode from './QuestionNode.jsx';
 
 const nodeTypes = { questionNode: QuestionNode };
-const defaultViewport = { x: 0, y: 0, zoom: 0.85 };
+const defaultViewport = { x: 0, y: 0, zoom: 0.6 }; // זום החוצה כדי לראות את הכל
 const flowStyles = { height: '750px', border: '1px solid #e2e8f0', borderRadius: '12px', background: '#f8fafc' };
 
-// --- פונקציית המרה ---
+// --- פונקציית המרה חכמה ---
 const convertTreeToFlow = (tree, initialData) => {
   const nodes = [];
   const edges = [];
+  let yOffset = 0; // משתנה עזר למיקום אנכי
+
+  // 1. צמתים קבועים (התחלה)
+  nodes.push({
+    id: 'start',
+    data: { label: 'מהו תחום הטיפול העיקרי?', questionType: 'single', outputs: [{id: 2, label: 'נפש (2)'}, {id: 1, label: 'גוף (1)'}, {id: 3, label: 'שפה (3)'}, {id: 4, label: 'תזונה (4)'}] },
+    position: { x: 50, y: 300 }, type: 'questionNode',
+  });
+
+  nodes.push({
+    id: 'targetEntity',
+    data: { label: 'עבור מי הטיפול?', questionType: 'single', outputs: tree.targetEntity.options },
+    position: { x: 400, y: 100 }, type: 'questionNode',
+  });
+
+  nodes.push({
+    id: 'audience',
+    data: { label: 'מהו גיל המטופל?', questionType: 'slider', outputs: [{id: 'default', label: 'המשך'}] },
+    position: { x: 400, y: 500 }, type: 'questionNode',
+  });
   
-  // מיקומים
-  const positions = {
-    start: { x: 50, y: 250 },
-    targetEntity: { x: 400, y: 50 },
-    audience: { x: 400, y: 450 },
-    profession: { x: 800, y: 250 },
-    symptoms: { x: 1200, y: 50 },
-    preferences: { x: 1200, y: 450 },
-    region: { x: 1600, y: 250 },
-  };
+  nodes.push({
+    id: 'profession',
+    data: { 
+        label: 'בחירת מקצוע', 
+        questionType: 'single', 
+        // טוען את המקצועות האמיתיים
+        outputs: initialData.professions.map(p => ({ id: p.id, label: p.name })) 
+    },
+    position: { x: 800, y: 300 }, type: 'questionNode',
+  });
 
-  const getOutputsForNode = (nodeId, nodeData) => {
-    if (nodeData.optionsKey) {
-        if (typeof nodeData.optionsKey === 'string') {
-          const dataKey = nodeData.optionsKey;
-          if (initialData && initialData[dataKey]) {
-            return initialData[dataKey].map(opt => ({
-              id: opt.id || opt.region_key, 
-              label: opt.name || opt.region_name_he
-            }));
-          }
-        }
-        if (typeof nodeData.optionsKey === 'function') {
-          if (nodeId === 'profession' && initialData?.professions) {
-              return initialData.professions.map(p => ({ id: p.id, label: p.name }));
-          }
-          if (nodeId === 'symptoms' && initialData?.symptoms) {
-              return initialData.symptoms.slice(0, 15).map(s => ({ id: s.search_key, label: s.name })).concat([{ id: 'more', label: '...ועוד' }]);
-          }
-          return [{ id: 'dynamic', label: '(תלוי בחירה קודמת)' }];
-        }
-    }
-    if (nodeData.options) {
-      return nodeData.options.map(opt => ({ id: opt.value, label: opt.label }));
-    }
-    return [{ id: 'default', label: 'המשך' }];
-  };
+  // 2. יצירת צומת סימפטומים *נפרד* לכל מקצוע
+  initialData.professions.forEach((prof, index) => {
+      // סינון סימפטומים למקצוע הנוכחי
+      const profSymptoms = initialData.symptoms
+        .filter(s => s.profession_id === prof.id)
+        .map(s => ({ id: s.search_key, label: s.name }));
 
-  for (const [nodeId, nodeData] of Object.entries(tree)) {
-    nodes.push({
-      id: nodeId,
-      data: { 
-        label: nodeData.text,
-        questionType: nodeData.type || 'single', // <-- הוספת סוג השאלה
-        outputs: getOutputsForNode(nodeId, nodeData),
-      }, 
-      position: positions[nodeId] || { x: 100, y: 100 + nodes.length * 50 },
-      type: 'questionNode',
-    });
-  }
+      if (profSymptoms.length > 0) {
+          const nodeId = `symptoms_${prof.id}`;
+          nodes.push({
+              id: nodeId,
+              data: { 
+                  label: `סימפטומים ל-${prof.name}`, 
+                  questionType: 'multiple',
+                  outputs: profSymptoms.concat([{ id: 'default', label: 'המשך' }])
+              },
+              position: { x: 1200, y: index * 350 }, // מרווח אנכי גדול לכל מקצוע
+              type: 'questionNode',
+          });
 
-  // --- יצירת חיצים (נקיים, בלי צבעים מבלבלים) ---
+          // חץ מהמקצוע הספציפי לצומת הסימפטומים שלו
+          edges.push({
+            id: `e_prof_${prof.id}_to_sym`, source: 'profession', sourceHandle: prof.id, target: nodeId,
+            type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: '#94a3b8' }
+          });
+
+          // חץ מצומת הסימפטומים להעדפות (משותף לכולם)
+          edges.push({
+            id: `e_sym_${prof.id}_to_pref`, source: nodeId, sourceHandle: 'default', target: 'preferences',
+            type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: '#94a3b8' }
+          });
+      } else {
+          // אם אין סימפטומים למקצוע, חבר אותו ישירות להעדפות (דילוג)
+          edges.push({
+            id: `e_prof_${prof.id}_skip`, source: 'profession', sourceHandle: prof.id, target: 'preferences',
+            label: 'ללא סימפטומים', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: '#f87171', strokeDasharray: 5 }
+          });
+      }
+  });
+
+  // 3. צמתים סופיים (משותפים)
+  const prefY = (initialData.professions.length * 350) / 2; // ממקם באמצע הגובה
+  
+  nodes.push({
+    id: 'preferences',
+    data: { label: 'דרישות נוספות', questionType: 'multiple', outputs: [{id: 'acc', label: 'נגישות'}, {id: 'fee', label: 'מחיר מוזל'}, {id: 'def', label: 'המשך'}] },
+    position: { x: 1600, y: prefY }, type: 'questionNode',
+  });
+
+  nodes.push({
+    id: 'region',
+    data: { 
+        label: 'אזור גיאוגרפי', 
+        questionType: 'single',
+        outputs: initialData.regions.map(r => ({ id: r.region_key, label: r.region_name_he }))
+    },
+    position: { x: 2000, y: prefY }, type: 'questionNode',
+  });
+
+
+  // --- חיצים בסיסיים ---
   const addEdgeClean = (id, source, sourceHandle, target, label = '') => {
       edges.push({
         id, source, sourceHandle, target, label,
-        type: 'smoothstep', // קווים מעוגלים יפים
-        markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: '#94a3b8', strokeWidth: 2 } // צבע אפור אחיד
+        type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: '#94a3b8', strokeWidth: 2 }
       });
   };
 
-  addEdgeClean('e1', 'start', 2, 'targetEntity', 'נפש');
-  addEdgeClean('e2', 'start', 1, 'audience', 'גוף');
-  
-  // ... (חיבור שאר הקווים בצורה דומה ללא לוגיקה מסובכת כרגע) ...
-  // אנו מוסיפים חיבורים גנריים כדי שהתרשים ייראה מלא
-  addEdgeClean('e3', 'targetEntity', 'individual', 'audience');
+  addEdgeClean('e1', 'start', 2, 'targetEntity'); 
+  addEdgeClean('e2', 'start', 1, 'audience'); 
+  addEdgeClean('e3', 'targetEntity', 'individual', 'audience'); // דוגמה לחיבור אחד
   addEdgeClean('e4', 'audience', 'default', 'profession');
-  addEdgeClean('e5', 'profession', 'default', 'symptoms');
-  addEdgeClean('e6', 'symptoms', 'default', 'preferences');
-  addEdgeClean('e7', 'preferences', 'is_accessible', 'region');
+  addEdgeClean('e5', 'preferences', 'def', 'region');
 
   return { initialNodes: nodes, initialEdges: edges };
 };
 
 
-// --- רכיב חלון העריכה המשודרג ---
+// --- רכיב חלון העריכה (זהה לקודם, נשאר יעיל) ---
 const NodeInspector = ({ node, setNodes, setEdges }) => {
   const [label, setLabel] = useState(node.data.label);
-  const [questionType, setQuestionType] = useState(node.data.questionType || 'single'); // <-- סטייט לסוג
+  const [questionType, setQuestionType] = useState(node.data.questionType || 'single');
   const [outputs, setOutputs] = useState(node.data.outputs || []);
 
   useEffect(() => {
@@ -112,12 +145,10 @@ const NodeInspector = ({ node, setNodes, setEdges }) => {
     setOutputs(node.data.outputs || []);
   }, [node]); 
 
-  // עדכון נתונים כללי
   const updateNodeData = (key, value) => {
     setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, [key]: value } } : n));
   };
 
-  // עדכון שם של תשובה
   const updateOutputLabel = (index, newLabel) => {
     const newOutputs = [...outputs];
     newOutputs[index] = { ...newOutputs[index], label: newLabel };
@@ -144,7 +175,6 @@ const NodeInspector = ({ node, setNodes, setEdges }) => {
         הגדרות שאלה
       </h4>
       
-      {/* שדה טקסט השאלה */}
       <div style={{ marginBottom: '20px' }}>
         <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>נוסח השאלה</label>
         <textarea
@@ -155,7 +185,6 @@ const NodeInspector = ({ node, setNodes, setEdges }) => {
         />
       </div>
 
-      {/* --- בחירת סוג השאלה --- */}
       <div style={{ marginBottom: '20px' }}>
         <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>סוג השאלה</label>
         <select
@@ -167,14 +196,8 @@ const NodeInspector = ({ node, setNodes, setEdges }) => {
             <option value="multiple">בחירה מרובה (Multiple Choice)</option>
             <option value="slider">סליידר / טווח (Slider)</option>
         </select>
-        <p style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
-            {questionType === 'single' && 'המשתמש בוחר תשובה אחת שקובעת את המשך המסלול.'}
-            {questionType === 'multiple' && 'המשתמש יכול לסמן מספר אפשרויות (למשל סימפטומים).'}
-            {questionType === 'slider' && 'המשתמש בוחר ערך מספרי על סקאלה (למשל גיל).'}
-        </p>
       </div>
 
-      {/* ניהול תשובות */}
       <div>
         <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '10px' }}>
             תשובות / יציאות
@@ -263,7 +286,7 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
       const sourceHandleLabel = sourceNode.data.outputs.find(o => o.id === connection.sourceHandle)?.label || '';
       const newEdge = { 
         ...connection, 
-        label: sourceHandleLabel, // מציג את שם התשובה על החץ
+        label: sourceHandleLabel, 
         type: 'smoothstep',
         markerEnd: { type: MarkerType.ArrowClosed },
         style: { stroke: '#94a3b8', strokeWidth: 2 }
@@ -277,7 +300,7 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
       id: newId,
       data: { 
         label: `שאלה חדשה ${nodeId}`,
-        questionType: 'single', // ברירת מחדל
+        questionType: 'single', 
         outputs: [{ id: 'opt1', label: 'כן' }, { id: 'opt2', label: 'לא' }],
       },
       position: { x: 50, y: 50 },
@@ -288,12 +311,13 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
   };
   
   const onSave = () => {
+    const cleanNodes = nodes.map(n => ({ id: n.id, data: n.data, position: n.position, type: n.type }));
     const flowData = {
-      nodes: nodes.map(n => ({ id: n.id, data: n.data, position: n.position, type: n.type })),
+      nodes: cleanNodes,
       edges: edges.map(e => ({ id: e.id, source: e.source, sourceHandle: e.sourceHandle, target: e.target, label: e.label })),
     };
     console.log('[DEBUG] Saving Flow JSON:', JSON.stringify(flowData, null, 2));
-    alert('תרשים נשמר (ראה Console). בשלב הבא נחבר את זה ל-DB.');
+    alert('תרשים נשמר (ראה Console).');
   };
 
   if (!initialData) return <div className="p-10 text-center text-gray-500">טוען...</div>;
