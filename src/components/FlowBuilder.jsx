@@ -1,4 +1,4 @@
-// src/components/FlowBuilder.jsx - v20 (Added Slider Settings)
+// src/components/FlowBuilder.jsx - v21 (Clean Lines & Uniform Style)
 import React, { useState, useCallback, useEffect } from 'react';
 import ReactFlow, {
   Controls,
@@ -16,70 +16,76 @@ import { questionsTree } from '../constants/questionsTree.js';
 import QuestionNode from './QuestionNode.jsx';
 
 const nodeTypes = { questionNode: QuestionNode };
-const defaultViewport = { x: 0, y: 0, zoom: 0.65 };
-const flowStyles = { height: '750px', border: '1px solid #e2e8f0', borderRadius: '12px', background: '#f8fafc' };
+const defaultViewport = { x: 0, y: 0, zoom: 0.6 }; 
+const flowStyles = { height: '750px', border: '1px solid #e2e8f0', borderRadius: '12px', background: '#f1f5f9' };
 
-// --- פונקציית המרה חכמה ---
+// --- פונקציית המרה ---
 const convertTreeToFlow = (tree, initialData) => {
   const nodes = [];
   const edges = [];
-  let yOffset = 0;
 
+  // סגנון אחיד לכל הקווים
+  const edgeStyle = { stroke: '#94a3b8', strokeWidth: 2 };
+
+  // פונקציית עזר ליצירת קו נקי
   const addEdgeClean = (source, target, sourceHandle = null, label = '') => {
     edges.push({
       id: `e_${source}-${target}_${sourceHandle || 'def'}`,
       source, target, sourceHandle: sourceHandle ? String(sourceHandle) : null, label,
-      type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: '#94a3b8', strokeWidth: 2 }
+      type: 'smoothstep', 
+      markerEnd: { type: MarkerType.ArrowClosed }, 
+      style: edgeStyle
     });
   };
 
-  // 1. התחלה
+  // --- 1. שאלות בסיס ---
+  
   nodes.push({
     id: 'start', type: 'questionNode', position: { x: 50, y: 300 },
     data: { 
-        label: 'מהו תחום הטיפול העיקרי?', questionType: 'single',
+        label: 'מהו תחום הטיפול העיקרי?', 
+        questionType: 'single',
         outputs: initialData.mainCategories.map(c => ({ id: c.id, label: c.name }))
     },
   });
 
-  // 2. קהל יעד
   nodes.push({
     id: 'targetEntity', type: 'questionNode', position: { x: 500, y: 50 },
     data: { label: 'עבור מי הטיפול?', questionType: 'single', outputs: tree.targetEntity.options },
   });
 
-  // 3. גיל (סליידר) - כאן אנחנו טוענים את הגדרות הטווח מהקובץ הקיים
   nodes.push({
     id: 'audience', type: 'questionNode', position: { x: 500, y: 450 },
     data: { 
         label: 'מהו גיל המטופל?', 
         questionType: 'slider', 
-        // --- !!! טעינת הגדרות הסליידר !!! ---
-        minVal: tree.audience.min || 0,
-        maxVal: tree.audience.max || 120,
-        outputs: [{id: 'default', label: 'המשך'}] 
+        minVal: 0, maxVal: 120,
+        outputs: [{id: 'default', label: 'הבא'}] 
     },
   });
   
-  // 4. מקצוע
   nodes.push({
     id: 'profession', type: 'questionNode', position: { x: 900, y: 300 },
     data: { 
-        label: 'בחירת מקצוע מטפל', questionType: 'single', 
+        label: 'בחירת מקצוע מטפל', 
+        questionType: 'single',
         outputs: initialData.professions.map(p => ({ id: p.id, label: p.name })) 
     },
   });
 
-  // חיבורים בסיסיים
+  // חיבורים
   addEdgeClean('start', 'targetEntity', 2, 'נפש'); 
   initialData.mainCategories.forEach(c => { if (c.id !== 2) addEdgeClean('start', 'audience', c.id); });
+  
   addEdgeClean('targetEntity', 'audience', 'individual');
   addEdgeClean('targetEntity', 'audience', 'couple');
   addEdgeClean('targetEntity', 'audience', 'family');
   addEdgeClean('targetEntity', 'audience', 'group');
   addEdgeClean('audience', 'profession', 'default');
 
-  // 5. פיצול סימפטומים
+
+  // --- 2. הפיצול הגדול: סימפטומים לפי מקצוע ---
+  
   const preferencesNodeId = 'preferences';
   const regionNodeId = 'region';
   let currentY = 0;
@@ -91,26 +97,40 @@ const convertTreeToFlow = (tree, initialData) => {
           .map(s => ({ id: s.search_key, label: s.name }));
 
       if (profSymptoms.length > 0) {
+          // יש סימפטומים - צור מלבן
           const symNodeId = `symptoms_prof_${prof.id}`;
           nodes.push({
-              id: symNodeId, type: 'questionNode', position: { x: 1400, y: currentY },
+              id: symNodeId,
+              type: 'questionNode',
+              position: { x: 1400, y: currentY },
               data: { 
-                  label: `סימפטומים: ${prof.name}`, questionType: 'multiple',
-                  outputs: profSymptoms.concat([{ id: 'default', label: 'המשך' }]) 
+                  label: `סימפטומים: ${prof.name}`, 
+                  questionType: 'multiple',
+                  outputs: profSymptoms.concat([{ id: 'next', label: 'סיום בחירה' }]) 
               },
           });
+
+          // חבר מקצוע -> סימפטומים
           addEdgeClean('profession', symNodeId, prof.id);
-          addEdgeClean(symNodeId, preferencesNodeId, 'default');
+          
+          // חבר סימפטומים -> העדפות
+          addEdgeClean(symNodeId, preferencesNodeId, 'next');
+
           currentY += SPACING_Y; 
       } else {
+          // --- !!! התיקון: קו רגיל לדילוג (במקום אדום) !!! ---
+          // אין סימפטומים - חבר ישירות מקצוע -> העדפות
           edges.push({
-            id: `e_skip_${prof.id}`, source: 'profession', sourceHandle: String(prof.id), target: preferencesNodeId,
-            label: '(ללא סימפטומים)', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: '#f87171', strokeDasharray: '5,5' }
+            id: `e_skip_${prof.id}`,
+            source: 'profession', sourceHandle: String(prof.id), target: preferencesNodeId,
+            label: '(ללא סימפטומים)',
+            type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed }, 
+            style: edgeStyle // שימוש בסגנון האחיד
           });
       }
   });
 
-  // 6. סיום
+  // --- 3. סיום ---
   const centerY = Math.max(currentY / 2, 300);
   nodes.push({
     id: preferencesNodeId, type: 'questionNode', position: { x: 1900, y: centerY },
@@ -119,6 +139,7 @@ const convertTreeToFlow = (tree, initialData) => {
         outputs: [{id: 'is_accessible', label: 'נגישות'}, {id: 'offers_reduced_fee', label: 'מחיר מוזל'}, {id: 'next', label: 'הבא'}] 
     },
   });
+
   nodes.push({
     id: 'region', type: 'questionNode', position: { x: 2300, y: centerY },
     data: { 
@@ -126,21 +147,19 @@ const convertTreeToFlow = (tree, initialData) => {
         outputs: initialData.regions.map(r => ({ id: r.region_key, label: r.region_name_he })) 
     },
   });
+
   addEdgeClean(preferencesNodeId, regionNodeId, 'next');
 
   return { initialNodes: nodes, initialEdges: edges };
 };
 
 
-// --- רכיב חלון העריכה המשודרג (עם הגדרות סליידר) ---
+// --- רכיב חלון העריכה ---
 const NodeInspector = ({ node, setNodes, setEdges }) => {
   const [label, setLabel] = useState(node.data.label);
   const [questionType, setQuestionType] = useState(node.data.questionType || 'single');
-  
-  // --- !!! שדות חדשים לסליידר !!! ---
   const [minVal, setMinVal] = useState(node.data.minVal || 0);
   const [maxVal, setMaxVal] = useState(node.data.maxVal || 100);
-  
   const [outputs, setOutputs] = useState(node.data.outputs || []);
 
   useEffect(() => {
@@ -156,10 +175,23 @@ const NodeInspector = ({ node, setNodes, setEdges }) => {
   };
 
   const updateOutputLabel = (index, newLabel) => {
-    const newOutputs = [...outputs];
-    newOutputs[index] = { ...newOutputs[index], label: newLabel };
+    const oldId = outputs[index].id; 
+    const newOutputs = outputs.map((out, i) => i === index ? { ...out, label: newLabel } : out);
     setOutputs(newOutputs);
-    updateNodeData('outputs', newOutputs);
+    
+    setNodes(nds => nds.map(n => {
+      if (n.id === node.id) {
+        return { ...n, data: { ...n.data, outputs: newOutputs } };
+      }
+      return n;
+    }));
+
+    setEdges(eds => eds.map(e => {
+        if (e.source === node.id && e.sourceHandle === oldId) {
+            return { ...e, labelText: `מ-'${newLabel}'` };
+        }
+        return e;
+    }));
   };
   
   const addOutput = () => {
@@ -179,13 +211,11 @@ const NodeInspector = ({ node, setNodes, setEdges }) => {
     <div style={{ width: '320px', background: 'white', borderRight: '1px solid #e5e7eb', padding: '24px', direction: 'rtl', textAlign: 'right', overflowY: 'auto', boxShadow: '-4px 0 15px rgba(0,0,0,0.05)', zIndex: 10 }}>
       <h4 style={{ fontWeight: '800', fontSize: '18px', color: '#1e293b', marginBottom: '20px', borderBottom: '2px solid #f1f5f9', paddingBottom: '10px' }}>הגדרות שאלה</h4>
       
-      {/* טקסט */}
       <div style={{ marginBottom: '20px' }}>
         <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>נוסח השאלה</label>
         <textarea value={label} onChange={(e) => { setLabel(e.target.value); updateNodeData('label', e.target.value); }} rows={2} style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '10px', fontSize: '14px', resize: 'none', outline: 'none' }} />
       </div>
 
-      {/* סוג שאלה */}
       <div style={{ marginBottom: '20px' }}>
         <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>סוג השאלה</label>
         <select value={questionType} onChange={(e) => { setQuestionType(e.target.value); updateNodeData('questionType', e.target.value); }} style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '8px', fontSize: '14px', background: 'white' }}>
@@ -195,7 +225,6 @@ const NodeInspector = ({ node, setNodes, setEdges }) => {
         </select>
       </div>
 
-      {/* --- !!! תצוגת הגדרות סליידר (רק אם נבחר סליידר) !!! --- */}
       {questionType === 'slider' && (
           <div style={{ marginBottom: '20px', padding: '10px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#166534', marginBottom: '10px' }}>טווח ערכים</label>
@@ -211,9 +240,7 @@ const NodeInspector = ({ node, setNodes, setEdges }) => {
               </div>
           </div>
       )}
-      {/* --- סוף הגדרות סליידר --- */}
 
-      {/* תשובות */}
       <div>
         <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '10px' }}>
             {questionType === 'slider' ? 'יציאה (לשלב הבא)' : 'תשובות / יציאות'}
@@ -224,7 +251,6 @@ const NodeInspector = ({ node, setNodes, setEdges }) => {
               <div style={{ background: '#f1f5f9', padding: '6px', borderRadius: '6px', flexGrow: 1 }}>
                   <input type="text" value={output.label} onChange={(e) => updateOutputLabel(index, e.target.value)} style={{ width: '100%', border: 'none', background: 'transparent', fontSize: '13px', outline: 'none' }} />
               </div>
-              {/* מחיקה אפשרית רק אם זה לא סליידר (כי לסליידר חייבת להיות יציאה אחת) */}
               {questionType !== 'slider' && (
                   <button onClick={() => deleteOutput(index)} style={{ background: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '6px', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>✕</button>
               )}
