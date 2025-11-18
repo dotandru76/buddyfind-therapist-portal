@@ -1,4 +1,4 @@
-// src/App.jsx (של buddyfind-therapist-portal) - הוספת מנהל נתונים
+// src/App.jsx (של buddyfind-therapist-portal) - v15 (Synced)
 import React, { useState, useEffect, useCallback } from 'react';
 import LoginModal from './components/LoginModal';
 import RegisterModal from './components/RegisterModal';
@@ -9,7 +9,7 @@ import LogContactForm from './components/LogContactForm';
 import LoadingSpinner from './components/LoadingSpinner';
 import AlertMessage from './components/AlertMessage';
 import FlowBuilder from './components/FlowBuilder'; 
-import ProfessionManager from './components/ProfessionManager'; // <-- !!! 1. ייבוא הרכיב החדש !!!
+import ProfessionManager from './components/ProfessionManager'; // <-- 1. ייבוא
 
 const API_URL = 'https://buddyfind-api.onrender.com';
 const LOGO_URL = 'https://res.cloudinary.com/dermarx8t/image/upload/v1761900572/WellMatch_logo_ktdyfy.png';
@@ -123,7 +123,7 @@ const App = () => {
                     </button>
                 )}
 
-                {/* --- !!! 2. הוספת הקישור החדש !!! --- */}
+                {/* --- 2. קישור למסך 1 --- */}
                 {isAdmin && (
                     <button 
                         onClick={() => setNav('data_manager')}
@@ -133,6 +133,7 @@ const App = () => {
                     </button>
                 )}
 
+                {/* --- 3. קישור למסך 2 --- */}
                 {isAdmin && (
                     <button 
                         onClick={() => setNav('flow_builder')}
@@ -241,7 +242,7 @@ const App = () => {
                      />
                 )}
                 
-                {/* --- !!! 3. הוספת הרכיב החדש !!! --- */}
+                {/* --- 4. הצגת מסך 1 --- */}
                 {user.user_type === 'admin' && nav === 'data_manager' && (
                      <ProfessionManager 
                         API_URL={API_URL}

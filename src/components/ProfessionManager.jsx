@@ -14,32 +14,29 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
     const [newProfName, setNewProfName] = useState('');
     const [newProfCat, setNewProfCat] = useState('');
 
-    // --- 1. טעינת נתונים ראשונית (מקצועות וקטגוריות) ---
+    // --- 1. טעינת נתונים ממקור האמת החדש ---
     const fetchData = useCallback(async () => {
         setLoading(true); setError(null);
         try {
-            // טעינת שתי הרשימות במקביל
-            const [profRes, catRes] = await Promise.all([
-                fetch(`${API_URL}/api/admin/professions`, { credentials: 'include' }),
-                fetch(`${API_URL}/api/initial-data`) // זה נתיב ציבורי, לא צריך אימות
-            ]);
+            // --- התיקון: קריאה לנתיב ה-API החדש והמאוחד ---
+            const res = await fetch(`${API_URL}/api/admin/data/all-definitions`, { 
+                credentials: 'include' 
+            });
 
-            if (profRes.status === 401 || profRes.status === 403) {
+            if (res.status === 401 || res.status === 403) {
                 onLogout(); return;
             }
-            if (!profRes.ok || !catRes.ok) {
+            if (!res.ok) {
                 throw new Error('שגיאה בטעינת הנתונים');
             }
 
-            const profData = await profRes.json();
-            const catData = await catRes.json();
+            const data = await res.json();
             
-            setProfessions(profData);
-            setMainCategories(catData.mainCategories || []);
+            setProfessions(data.professions || []);
+            setMainCategories(data.mainCategories || []);
             
-            // הגדרת ערך ברירת מחדל לטופס
-            if (catData.mainCategories && catData.mainCategories.length > 0) {
-                setNewProfCat(catData.mainCategories[0].id);
+            if (data.mainCategories && data.mainCategories.length > 0) {
+                setNewProfCat(data.mainCategories[0].id);
             }
 
         } catch (err) {
@@ -73,15 +70,16 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
                     main_category_id: parseInt(newProfCat, 10)
                 })
             });
-
+            
+            const data = await res.json();
             if (!res.ok) {
-                const data = await res.json();
                 throw new Error(data.error || 'שגיאה ביצירת המקצוע');
             }
             
             setMessage('מקצוע חדש נוצר בהצלחה!');
             setNewProfName(''); // איפוס הטופס
-            fetchData(); // טעינה מחדש של הרשימה
+            
+            setProfessions(prev => [...prev, data.newProfession].sort((a, b) => a.name.localeCompare(b.name)));
 
         } catch (err) {
             setError(err.message);
@@ -141,9 +139,10 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
             {/* --- טבלת מקצועות קיימים --- */}
             <div className="bg-white p-6 rounded-lg shadow">
                 <h4 className="text-lg font-semibold mb-4">מקצועות קיימים</h4>
-                {loading && <LoadingSpinner />}
+                {loading && professions.length === 0 && <LoadingSpinner />}
                 {!loading && professions.length === 0 && <p>לא נמצאו מקצועות.</p>}
-                {!loading && professions.length > 0 && (
+                
+                {professions.length > 0 && (
                     <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-200 text-sm">
                             <thead className="bg-gray-50">
@@ -162,7 +161,6 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
                                         <td className="px-4 py-3 font-mono">{prof.id}</td>
                                         <td className="px-4 py-3">
                                             <button className="text-primary-blue hover:underline text-xs">ערוך</button>
-                                            {/* (נוסיף מחיקה בהמשך) */}
                                         </td>
                                     </tr>
                                 ))}
