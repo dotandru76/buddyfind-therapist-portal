@@ -1,4 +1,4 @@
-// src/components/QuestionNode.jsx
+// src/components/QuestionNode.jsx - (v6 - Improved Handles for Connection)
 import React from 'react';
 import { Handle, Position } from 'reactflow';
 
@@ -11,7 +11,8 @@ const nodeStyle = {
   direction: 'rtl',
   boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
   overflow: 'hidden',
-  fontFamily: 'sans-serif'
+  fontFamily: 'sans-serif',
+  position: 'relative' // חשוב למיקום ה-Handles
 };
 
 const nodeHeaderStyle = {
@@ -43,7 +44,7 @@ const outputRowStyle = {
   padding: '8px 15px',
   borderBottom: '1px solid #e2e8f0',
   display: 'flex',
-  justifyContent: 'space-between', // מרווח בין הטקסט לידית
+  justifyContent: 'space-between', 
   alignItems: 'center',
   fontSize: '13px',
   color: '#334155'
@@ -68,11 +69,19 @@ const QuestionNode = ({ data, selected }) => {
 
   return (
     <div style={customNodeStyle}>
-      {/* נקודת כניסה ראשית (למעלה או שמאל) */}
+      {/* נקודת כניסה (Target) - שמאל. 
+          הגדלנו מעט את השטח כדי להקל על החיבור 
+      */}
       <Handle 
         type="target" 
         position={Position.Left} 
-        style={{ background: '#64748b', width: '12px', height: '12px', left: '-6px' }} 
+        style={{ 
+            background: '#64748b', 
+            width: '14px', 
+            height: '14px', 
+            left: '-8px',
+            border: '2px solid white'
+        }} 
       />
       
       <div style={nodeHeaderStyle}>
@@ -84,12 +93,18 @@ const QuestionNode = ({ data, selected }) => {
         {(data.outputs || []).map((output, index) => (
           <div key={`${output.id}-${index}`} style={outputRowStyle}>
             <span>{output.label}</span>
-            {/* נקודת יציאה לכל תשובה */}
+            {/* נקודת יציאה (Source) - ימין */}
             <Handle 
               type="source" 
               position={Position.Right} 
               id={String(output.id)} 
-              style={{ background: '#10b981', width: '10px', height: '10px', right: '-5px' }}
+              style={{ 
+                  background: '#10b981', 
+                  width: '12px', 
+                  height: '12px', 
+                  right: '-7px',
+                  border: '2px solid white'
+              }}
             />
           </div>
         ))}
