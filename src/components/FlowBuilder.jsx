@@ -1,4 +1,4 @@
-// src/components/FlowBuilder.jsx - v22 (Improved Connections)
+// src/components/FlowBuilder.jsx - FINAL FULL VERSION (Auto-Split & Edit)
 import React, { useState, useCallback, useEffect } from 'react';
 import ReactFlow, {
   Controls,
@@ -19,89 +19,151 @@ const nodeTypes = { questionNode: QuestionNode };
 const defaultViewport = { x: 0, y: 0, zoom: 0.6 }; 
 const flowStyles = { height: '750px', border: '1px solid #e2e8f0', borderRadius: '12px', background: '#f1f5f9' };
 
-// --- פונקציית המרה ---
+// --- פונקציית המרה: יוצרת את התרשים הראשוני מהנתונים ---
 const convertTreeToFlow = (tree, initialData) => {
-  // ... (אותה לוגיקה בדיוק כמו בקוד הקודם, ללא שינוי, כדי לשמור על המבנה הקיים) ...
-  // למען הקיצור, אני מעתיק את הפונקציה המלאה מהגרסה הקודמת (v21) כי היא הייתה נכונה
-  
   const nodes = [];
   const edges = [];
+
+  // פונקציית עזר ליצירת קווים נקיים
   const addEdgeClean = (source, target, sourceHandle = null, label = '') => {
     edges.push({
       id: `e_${source}-${target}_${sourceHandle || 'def'}`,
       source, target, sourceHandle: sourceHandle ? String(sourceHandle) : null, label,
-      type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: '#94a3b8', strokeWidth: 2 }
+      type: 'smoothstep', 
+      markerEnd: { type: MarkerType.ArrowClosed }, 
+      style: { stroke: '#94a3b8', strokeWidth: 2 }
     });
   };
 
-  // ... (שחזור הצמתים והחיבורים כמו בקובץ v21) ...
-  // 1. התחלה
+  // --- 1. יצירת שאלות הבסיס ---
+  
+  // שאלה 1: תחום ראשי
   nodes.push({
     id: 'start', type: 'questionNode', position: { x: 50, y: 300 },
-    data: { label: 'מהו תחום הטיפול העיקרי?', questionType: 'single', outputs: initialData.mainCategories.map(c => ({ id: c.id, label: c.name })) },
+    data: { 
+        label: 'מהו תחום הטיפול העיקרי?', 
+        questionType: 'single',
+        outputs: initialData.mainCategories.map(c => ({ id: c.id, label: c.name }))
+    },
   });
+
+  // שאלה 2: קהל יעד (מיועדת כרגע לנפש)
   nodes.push({
     id: 'targetEntity', type: 'questionNode', position: { x: 500, y: 50 },
     data: { label: 'עבור מי הטיפול?', questionType: 'single', outputs: tree.targetEntity.options },
   });
+
+  // שאלה 3: גיל
   nodes.push({
     id: 'audience', type: 'questionNode', position: { x: 500, y: 450 },
-    data: { label: 'מהו גיל המטופל?', questionType: 'slider', minVal: 0, maxVal: 120, outputs: [{id: 'default', label: 'הבא'}] },
+    data: { 
+        label: 'מהו גיל המטופל?', 
+        questionType: 'slider', 
+        minVal: 0, maxVal: 120, 
+        outputs: [{id: 'default', label: 'הבא (סיום שלב)'}] 
+    },
   });
+  
+  // שאלה 4: בחירת מקצוע (הצומת המרכזי)
   nodes.push({
     id: 'profession', type: 'questionNode', position: { x: 900, y: 300 },
-    data: { label: 'בחירת מקצוע מטפל', questionType: 'single', outputs: initialData.professions.map(p => ({ id: p.id, label: p.name })) },
+    data: { 
+        label: 'בחירת מקצוע מטפל', 
+        questionType: 'single',
+        // מציג את כל המקצועות כדי לאפשר חיבורים מפוצלים
+        outputs: initialData.professions.map(p => ({ id: p.id, label: p.name })) 
+    },
   });
 
+  // --- חיבורים לוגיים ---
   addEdgeClean('start', 'targetEntity', 2, 'נפש'); 
-  initialData.mainCategories.forEach(c => { if (c.id !== 2) addEdgeClean('start', 'audience', c.id); });
+  // חיבור שאר הקטגוריות (גוף, שפה וכו') ישירות לגיל
+  initialData.mainCategories.forEach(c => { 
+      if (c.id !== 2) addEdgeClean('start', 'audience', c.id, c.name); 
+  });
+  
   addEdgeClean('targetEntity', 'audience', 'individual');
   addEdgeClean('targetEntity', 'audience', 'couple');
   addEdgeClean('targetEntity', 'audience', 'family');
   addEdgeClean('targetEntity', 'audience', 'group');
   addEdgeClean('audience', 'profession', 'default');
 
+
+  // --- 2. הפיצול הגדול: סימפטומים לפי מקצוע ---
+  
   const preferencesNodeId = 'preferences';
   const regionNodeId = 'region';
   let currentY = 0;
   const SPACING_Y = 350; 
 
   initialData.professions.forEach((prof) => {
-      const profSymptoms = initialData.symptoms.filter(s => s.profession_id === prof.id).map(s => ({ id: s.search_key, label: s.name }));
+      // שליפת הסימפטומים הרלוונטיים למקצוע זה בלבד
+      const profSymptoms = initialData.symptoms
+          .filter(s => s.profession_id === prof.id)
+          .map(s => ({ id: s.search_key, label: s.name }));
+
       if (profSymptoms.length > 0) {
+          // יש סימפטומים -> צור שאלה ייעודית
           const symNodeId = `symptoms_prof_${prof.id}`;
+          
           nodes.push({
-              id: symNodeId, type: 'questionNode', position: { x: 1400, y: currentY },
-              data: { label: `סימפטומים: ${prof.name}`, questionType: 'multiple', outputs: profSymptoms.concat([{ id: 'next', label: 'סיום בחירה' }]) },
+              id: symNodeId,
+              type: 'questionNode',
+              position: { x: 1400, y: currentY },
+              data: { 
+                  label: `סימפטומים: ${prof.name}`, 
+                  questionType: 'multiple',
+                  outputs: profSymptoms.concat([{ id: 'next', label: 'סיום בחירה' }]) 
+              },
           });
+
+          // חבר את המקצוע הספציפי לצומת הסימפטומים שלו
           addEdgeClean('profession', symNodeId, prof.id);
+          
+          // חבר את צומת הסימפטומים להמשך (העדפות)
           addEdgeClean(symNodeId, preferencesNodeId, 'next');
+
           currentY += SPACING_Y; 
       } else {
+          // אין סימפטומים -> חבר ישירות להמשך (דילוג)
           edges.push({
-            id: `e_skip_${prof.id}`, source: 'profession', sourceHandle: String(prof.id), target: preferencesNodeId,
-            label: '(ללא סימפטומים)', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: '#94a3b8', strokeWidth: 2 }
+            id: `e_skip_${prof.id}`,
+            source: 'profession', sourceHandle: String(prof.id), target: preferencesNodeId,
+            label: '(ללא סימפטומים)',
+            type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed }, 
+            style: { stroke: '#94a3b8', strokeWidth: 2, strokeDasharray: '5,5' } // קו מקווקו
           });
       }
   });
 
+  // --- 3. סיום (העדפות ואזור) ---
   const centerY = Math.max(currentY / 2, 300);
+
   nodes.push({
     id: preferencesNodeId, type: 'questionNode', position: { x: 1900, y: centerY },
-    data: { label: 'העדפות נוספות', questionType: 'multiple', outputs: [{id: 'is_accessible', label: 'נגישות'}, {id: 'offers_reduced_fee', label: 'מחיר מוזל'}, {id: 'next', label: 'הבא'}] },
+    data: { 
+        label: 'העדפות נוספות', 
+        questionType: 'multiple', 
+        outputs: [{id: 'is_accessible', label: 'נגישות'}, {id: 'offers_reduced_fee', label: 'מחיר מוזל'}, {id: 'next', label: 'הבא'}] 
+    },
   });
+
   nodes.push({
-    id: 'region', type: 'questionNode', position: { x: 2300, y: centerY },
-    data: { label: 'בחירת אזור גיאוגרפי', questionType: 'single', outputs: initialData.regions.map(r => ({ id: r.region_key, label: r.region_name_he })) },
+    id: regionNodeId, type: 'questionNode', position: { x: 2300, y: centerY },
+    data: { 
+        label: 'בחירת אזור גיאוגרפי', 
+        questionType: 'single',
+        outputs: initialData.regions.map(r => ({ id: r.region_key, label: r.region_name_he })) 
+    },
   });
+
   addEdgeClean(preferencesNodeId, regionNodeId, 'next');
 
   return { initialNodes: nodes, initialEdges: edges };
 };
 
 
-// --- רכיב חלון העריכה (NodeInspector) ---
-// (אותו קוד בדיוק כמו בגרסה v21 - אין צורך לשנות, הוא עובד מעולה)
+// --- רכיב חלון העריכה (Inspector) ---
 const NodeInspector = ({ node, setNodes, setEdges }) => {
   const [label, setLabel] = useState(node.data.label);
   const [questionType, setQuestionType] = useState(node.data.questionType || 'single');
@@ -120,31 +182,47 @@ const NodeInspector = ({ node, setNodes, setEdges }) => {
   const updateNodeData = (key, value) => {
     setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, [key]: value } } : n));
   };
+
   const updateOutputLabel = (index, newLabel) => {
-    const newOutputs = [...outputs];
-    newOutputs[index] = { ...newOutputs[index], label: newLabel };
+    const oldId = outputs[index].id; 
+    const newOutputs = outputs.map((out, i) => i === index ? { ...out, label: newLabel } : out);
     setOutputs(newOutputs);
-    updateNodeData('outputs', newOutputs);
+    setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, outputs: newOutputs } } : n));
+
+    // עדכון תוויות על חיצים קיימים
+    setEdges(eds => eds.map(e => {
+        if (e.source === node.id && e.sourceHandle === String(oldId)) {
+            return { ...e, label: newLabel }; // עדכון התווית על החץ
+        }
+        return e;
+    }));
   };
+  
   const addOutput = () => {
     const newId = `opt_${Date.now()}`;
     const newOutputs = [...outputs, { id: newId, label: 'אופציה חדשה' }];
     setOutputs(newOutputs);
     updateNodeData('outputs', newOutputs);
   };
+  
   const deleteOutput = (index) => {
+    const outputToRemove = outputs[index];
     const newOutputs = outputs.filter((_, i) => i !== index);
     setOutputs(newOutputs);
     updateNodeData('outputs', newOutputs);
+    // מחיקת חיצים שמחוברים ליציאה שנמחקה
+    setEdges(eds => eds.filter(e => !(e.source === node.id && e.sourceHandle === String(outputToRemove.id))));
   };
 
   return (
     <div style={{ width: '320px', background: 'white', borderRight: '1px solid #e5e7eb', padding: '24px', direction: 'rtl', textAlign: 'right', overflowY: 'auto', boxShadow: '-4px 0 15px rgba(0,0,0,0.05)', zIndex: 10 }}>
       <h4 style={{ fontWeight: '800', fontSize: '18px', color: '#1e293b', marginBottom: '20px', borderBottom: '2px solid #f1f5f9', paddingBottom: '10px' }}>הגדרות שאלה</h4>
+      
       <div style={{ marginBottom: '20px' }}>
         <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>נוסח השאלה</label>
         <textarea value={label} onChange={(e) => { setLabel(e.target.value); updateNodeData('label', e.target.value); }} rows={2} style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '10px', fontSize: '14px', resize: 'none', outline: 'none' }} />
       </div>
+
       <div style={{ marginBottom: '20px' }}>
         <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>סוג השאלה</label>
         <select value={questionType} onChange={(e) => { setQuestionType(e.target.value); updateNodeData('questionType', e.target.value); }} style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '8px', fontSize: '14px', background: 'white' }}>
@@ -153,6 +231,7 @@ const NodeInspector = ({ node, setNodes, setEdges }) => {
             <option value="slider">סליידר / טווח (Slider)</option>
         </select>
       </div>
+
       {questionType === 'slider' && (
           <div style={{ marginBottom: '20px', padding: '10px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#166534', marginBottom: '10px' }}>טווח ערכים</label>
@@ -162,19 +241,26 @@ const NodeInspector = ({ node, setNodes, setEdges }) => {
               </div>
           </div>
       )}
+
       <div>
-        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '10px' }}>{questionType === 'slider' ? 'יציאה (לשלב הבא)' : 'תשובות / יציאות'}</label>
+        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '10px' }}>
+            {questionType === 'slider' ? 'יציאה (לשלב הבא)' : 'תשובות / יציאות'}
+        </label>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {outputs.map((output, index) => (
             <div key={output.id || index} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <div style={{ background: '#f1f5f9', padding: '6px', borderRadius: '6px', flexGrow: 1 }}>
                   <input type="text" value={output.label} onChange={(e) => updateOutputLabel(index, e.target.value)} style={{ width: '100%', border: 'none', background: 'transparent', fontSize: '13px', outline: 'none' }} />
               </div>
-              {questionType !== 'slider' && (<button onClick={() => deleteOutput(index)} style={{ background: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '6px', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>✕</button>)}
+              {questionType !== 'slider' && (
+                  <button onClick={() => deleteOutput(index)} style={{ background: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '6px', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>✕</button>
+              )}
             </div>
           ))}
         </div>
-        {questionType !== 'slider' && (<button onClick={addOutput} style={{ width: '100%', marginTop: '15px', padding: '10px', background: '#eff6ff', color: '#3b82f6', border: '1px dashed #3b82f6', borderRadius: '8px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>+ הוסף תשובה</button>)}
+        {questionType !== 'slider' && (
+            <button onClick={addOutput} style={{ width: '100%', marginTop: '15px', padding: '10px', background: '#eff6ff', color: '#3b82f6', border: '1px dashed #3b82f6', borderRadius: '8px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>+ הוסף תשובה</button>
+        )}
       </div>
     </div>
   );
@@ -218,15 +304,12 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
       if (deleted.find(n => n.id === selectedNode?.id)) setSelectedNode(null);
   }, [selectedNode]);
   
-  // --- !!! התיקון: פונקציית חיבור משופרת !!! ---
   const onConnect = useCallback((connection) => {
       const sourceNode = nodes.find(n => n.id === connection.source);
-      // מוצא את התווית של התשובה (היציאה) כדי לשים אותה על הקו
-      const sourceHandleLabel = sourceNode?.data?.outputs?.find(o => String(o.id) === connection.sourceHandle)?.label || '';
-      
+      const sourceHandleLabel = sourceNode.data.outputs.find(o => String(o.id) === connection.sourceHandle)?.label || '';
       const newEdge = { 
         ...connection, 
-        label: sourceHandleLabel, // שם התשובה יופיע על החץ
+        label: sourceHandleLabel, 
         type: 'smoothstep',
         markerEnd: { type: MarkerType.ArrowClosed },
         style: { stroke: '#94a3b8', strokeWidth: 2 }
