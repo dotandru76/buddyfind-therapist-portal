@@ -1,178 +1,214 @@
-// src/components/ProfessionManager.jsx - v3 (With Edit Mode)
+// src/components/ProfessionManager.jsx - v4 (Full CMS: Professions, Specialties, Symptoms)
 import React, { useState, useEffect, useCallback } from 'react';
 import LoadingSpinner from './LoadingSpinner';
 import AlertMessage from './AlertMessage';
 
+const TabButton = ({ text, isActive, onClick }) => (
+    <button
+        onClick={onClick}
+        className={`px-6 py-3 font-semibold transition-colors ${
+            isActive 
+            ? 'text-primary-blue border-b-2 border-primary-blue bg-blue-50' 
+            : 'text-gray-500 hover:bg-gray-50'
+        }`}
+    >
+        {text}
+    </button>
+);
+
 const ProfessionManager = ({ API_URL, onLogout }) => {
-    const [professions, setProfessions] = useState([]);
-    const [mainCategories, setMainCategories] = useState([]);
+    const [activeTab, setActiveTab] = useState('professions'); // professions, specialties, symptoms
+    
+    const [data, setData] = useState({ professions: [], specialties: [], symptoms: [], mainCategories: [] });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [message, setMessage] = useState(null);
     
-    const [newProfName, setNewProfName] = useState('');
-    const [newProfCat, setNewProfCat] = useState('');
-    
-    // --- !!! מצב עריכה !!! ---
-    const [editingId, setEditingId] = useState(null); // ה-ID של המקצוע שנערך כרגע
-    const [editName, setEditName] = useState('');
-    const [editCat, setEditCat] = useState('');
-    const [saving, setSaving] = useState(false);
+    // טפסי הוספה
+    const [newItemName, setNewItemName] = useState('');
+    const [selectedParentId, setSelectedParentId] = useState(''); // קטגוריה (למקצוע) או מקצוע (להתמחות/סימפטום)
 
+    // --- 1. טעינת כל הנתונים ---
     const fetchData = useCallback(async () => {
         setLoading(true); setError(null);
         try {
-            const res = await fetch(`${API_URL}/api/admin/data/all-definitions`, { 
-                credentials: 'include' 
-            });
+            const res = await fetch(`${API_URL}/api/admin/data/all-definitions`, { credentials: 'include' });
             if (res.status === 401 || res.status === 403) { onLogout(); return; }
             if (!res.ok) throw new Error('שגיאה בטעינת הנתונים');
-            const data = await res.json();
-            setProfessions(data.professions || []);
-            setMainCategories(data.mainCategories || []);
-            if (data.mainCategories && data.mainCategories.length > 0) {
-                setNewProfCat(data.mainCategories[0].id);
-            }
+            const result = await res.json();
+            setData(result);
+            
+            // ברירת מחדל ל-Select
+            if (activeTab === 'professions' && result.mainCategories.length > 0) setSelectedParentId(result.mainCategories[0].id);
+            if ((activeTab === 'specialties' || activeTab === 'symptoms') && result.professions.length > 0) setSelectedParentId(result.professions[0].id);
+
         } catch (err) { setError(err.message); } 
         finally { setLoading(false); }
-    }, [API_URL, onLogout]);
+    }, [API_URL, onLogout, activeTab]); // תלות ב-activeTab כדי לאפס את ה-Select
 
     useEffect(() => { fetchData(); }, [fetchData]);
 
+    // --- 2. יצירת פריט חדש ---
     const handleCreate = async (e) => {
         e.preventDefault();
-        setError(null); setMessage(null);
-        if (!newProfName.trim() || !newProfCat) { setError('יש למלא את כל השדות.'); return; }
-        setSaving(true);
+        if (!newItemName.trim() || !selectedParentId) return;
+        
+        let endpoint, body;
+        if (activeTab === 'professions') {
+            endpoint = '/api/admin/professions';
+            body = { name: newItemName, main_category_id: selectedParentId };
+        } else if (activeTab === 'specialties') {
+            endpoint = '/api/admin/specialties';
+            body = { name: newItemName, profession_id: selectedParentId };
+        } else { // symptoms
+            endpoint = '/api/admin/symptoms';
+            body = { name: newItemName, profession_id: selectedParentId };
+        }
+
+        setLoading(true);
         try {
-            const res = await fetch(`${API_URL}/api/admin/professions`, {
+            const res = await fetch(`${API_URL}${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
-                body: JSON.stringify({ name: newProfName, main_category_id: parseInt(newProfCat, 10) })
+                body: JSON.stringify(body)
             });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'שגיאה ביצירה');
-            setMessage('מקצוע חדש נוצר בהצלחה!');
-            setNewProfName('');
-            setProfessions(prev => [...prev, data.newProfession].sort((a, b) => a.name.localeCompare(b.name)));
-        } catch (err) { setError(err.message); } 
-        finally { setSaving(false); }
+            if (!res.ok) throw new Error('שגיאה ביצירה');
+            setMessage('נוצר בהצלחה!');
+            setNewItemName('');
+            fetchData(); // רענן הכל
+        } catch (err) { setError(err.message); setLoading(false); }
     };
-    
-    // --- התחלת עריכה ---
-    const startEdit = (prof) => {
-        setEditingId(prof.id);
-        setEditName(prof.name);
-        setEditCat(prof.main_category_id);
-        setMessage(null); setError(null);
-    };
-    
-    // --- ביטול עריכה ---
-    const cancelEdit = () => {
-        setEditingId(null);
-    };
-    
-    // --- שמירת שינויים ---
-    const saveEdit = async (id) => {
-        setSaving(true); setError(null);
+
+    // --- 3. מחיקת פריט ---
+    const handleDelete = async (id, type) => {
+        if (!window.confirm('האם אתה בטוח? המחיקה היא סופית.')) return;
+        const endpoint = type === 'specialty' ? `/api/admin/specialties/${id}` : `/api/admin/symptoms/${id}`;
+        
         try {
-            const res = await fetch(`${API_URL}/api/admin/professions/${id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ name: editName, main_category_id: parseInt(editCat, 10) })
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'שגיאה בעדכון');
-            
-            setMessage('המקצוע עודכן בהצלחה.');
-            // עדכון הרשימה המקומית
-            setProfessions(prev => prev.map(p => p.id === id ? data.updatedProfession : p));
-            setEditingId(null);
-        } catch (err) { setError(err.message); } 
-        finally { setSaving(false); }
+            const res = await fetch(`${API_URL}${endpoint}`, { method: 'DELETE', credentials: 'include' });
+            if (!res.ok) throw new Error('שגיאה במחיקה');
+            fetchData();
+        } catch (err) { alert(err.message); }
     };
+
+    // --- סינון להצגה בטבלה ---
+    const getFilteredList = () => {
+        if (activeTab === 'professions') return data.professions;
+        // עבור התמחויות וסימפטומים, נציג את כולם אבל נמיין לפי מקצוע
+        if (activeTab === 'specialties') return data.specialties;
+        if (activeTab === 'symptoms') return data.symptoms;
+        return [];
+    };
+    
+    const getParentName = (item) => {
+        if (activeTab === 'professions') return item.main_category_name;
+        // עבור התמחויות וסימפטומים, ההורה הוא המקצוע
+        const prof = data.professions.find(p => p.id === item.profession_id);
+        return prof ? prof.name : '-';
+    };
+
+    const list = getFilteredList();
 
     return (
         <div className="space-y-6">
-            <h3 className="text-2xl font-bold text-text-dark">מסך 1: ניהול נתונים (מקצועות)</h3>
+            <div className="flex justify-between items-center">
+                <h3 className="text-2xl font-bold text-text-dark">ניהול נתונים (CMS)</h3>
+            </div>
             
             {message && <AlertMessage type="success" message={message} onDismiss={() => setMessage(null)} />}
             {error && <AlertMessage type="error" message={error} onDismiss={() => setError(null)} />}
 
-            <form onSubmit={handleCreate} className="bg-white p-6 rounded-lg shadow space-y-4 border-t-4 border-green-500">
-                <h4 className="text-lg font-semibold">הוספת מקצוע חדש</h4>
+            {/* --- טאבים --- */}
+            <div className="flex border-b border-gray-200 bg-white rounded-t-lg overflow-hidden">
+                <TabButton text="מקצועות" isActive={activeTab === 'professions'} onClick={() => setActiveTab('professions')} />
+                <TabButton text="התמחויות" isActive={activeTab === 'specialties'} onClick={() => setActiveTab('specialties')} />
+                <TabButton text="סימפטומים" isActive={activeTab === 'symptoms'} onClick={() => setActiveTab('symptoms')} />
+            </div>
+
+            {/* --- טופס הוספה --- */}
+            <form onSubmit={handleCreate} className="bg-white p-6 rounded-b-lg shadow space-y-4 border-t-0">
+                <h4 className="text-lg font-semibold text-gray-700">
+                    {activeTab === 'professions' ? 'הוספת מקצוע חדש' : 
+                     activeTab === 'specialties' ? 'הוספת התמחות למקצוע' : 
+                     'הוספת סימפטום למקצוע'}
+                </h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* שדה בחירה (הורה) */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">שם המקצוע</label>
-                        <input type="text" value={newProfName} onChange={(e) => setNewProfName(e.target.value)} className="block w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="למשל: פסיכותרפיה" />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">קטגוריה ראשית</label>
-                        <select value={newProfCat} onChange={(e) => setNewProfCat(e.target.value)} className="block w-full px-3 py-2 border border-gray-300 rounded-md bg-white">
-                            {mainCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                            {activeTab === 'professions' ? 'שייך לקטגוריה' : 'שייך למקצוע'}
+                        </label>
+                        <select 
+                            value={selectedParentId} 
+                            onChange={(e) => setSelectedParentId(e.target.value)} 
+                            className="block w-full px-3 py-2 border border-gray-300 rounded-md bg-white"
+                        >
+                            {activeTab === 'professions' 
+                                ? data.mainCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)
+                                : data.professions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)
+                            }
                         </select>
                     </div>
+
+                    {/* שדה שם */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                             {activeTab === 'professions' ? 'שם המקצוע' : 
+                              activeTab === 'specialties' ? 'שם ההתמחות' : 'שם הסימפטום'}
+                        </label>
+                        <input
+                            type="text"
+                            value={newItemName}
+                            onChange={(e) => setNewItemName(e.target.value)}
+                            className="block w-full px-3 py-2 border border-gray-300 rounded-md"
+                            placeholder="הקלד שם..."
+                        />
+                    </div>
+
                     <div className="self-end">
-                        <button type="submit" disabled={saving} className="py-2 px-4 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 transition disabled:opacity-50">
-                            {saving ? 'שומר...' : 'צור מקצוע'}
+                        <button type="submit" disabled={loading} className="w-full py-2 px-4 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition disabled:opacity-50">
+                            {loading ? 'טוען...' : '+ הוסף'}
                         </button>
                     </div>
                 </div>
             </form>
 
+            {/* --- טבלה --- */}
             <div className="bg-white p-6 rounded-lg shadow">
-                <h4 className="text-lg font-semibold mb-4">מקצועות קיימים ({professions.length})</h4>
-                {loading && professions.length === 0 && <LoadingSpinner />}
-                
-                {!loading && professions.length > 0 && (
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200 text-sm">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-4 py-3 text-right font-semibold text-gray-600 bg-gray-100">שם המקצוע</th>
-                                    <th className="px-4 py-3 text-right font-semibold text-gray-600 bg-gray-100">קטגוריה ראשית</th>
-                                    <th className="px-4 py-3 text-right font-semibold text-gray-600 bg-gray-100 w-24">פעולות</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {professions.map(prof => (
-                                    <tr key={prof.id} className="hover:bg-gray-50">
-                                        {editingId === prof.id ? (
-                                            // --- שורת עריכה ---
-                                            <>
-                                                <td className="px-4 py-3">
-                                                    <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full px-2 py-1 border border-blue-300 rounded" />
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <select value={editCat} onChange={(e) => setEditCat(e.target.value)} className="w-full px-2 py-1 border border-blue-300 rounded">
-                                                        {mainCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
-                                                    </select>
-                                                </td>
-                                                <td className="px-4 py-3 flex gap-2">
-                                                    <button onClick={() => saveEdit(prof.id)} disabled={saving} className="text-green-600 hover:text-green-800 font-medium">שמור</button>
-                                                    <button onClick={cancelEdit} disabled={saving} className="text-gray-500 hover:text-gray-700">ביטול</button>
-                                                </td>
-                                            </>
-                                        ) : (
-                                            // --- שורת תצוגה ---
-                                            <>
-                                                <td className="px-4 py-3 font-medium text-gray-900">{prof.name}</td>
-                                                <td className="px-4 py-3 text-gray-600">{prof.main_category_name}</td>
-                                                <td className="px-4 py-3">
-                                                    <button onClick={() => startEdit(prof)} className="text-primary-blue hover:text-secondary-purple font-medium transition">
-                                                        ✏️ ערוך
-                                                    </button>
-                                                </td>
-                                            </>
+                <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200 text-sm">
+                        <thead className="bg-gray-50">
+                            <tr>
+                                <th className="px-4 py-2 text-right font-semibold text-gray-600">ID</th>
+                                <th className="px-4 py-2 text-right font-semibold text-gray-600">שם</th>
+                                <th className="px-4 py-2 text-right font-semibold text-gray-600">משויך ל-</th>
+                                <th className="px-4 py-2 text-right font-semibold text-gray-600 w-24">פעולות</th>
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                            {list.map(item => (
+                                <tr key={item.id} className="hover:bg-gray-50">
+                                    <td className="px-4 py-3 font-mono text-gray-400">#{item.id}</td>
+                                    <td className="px-4 py-3 font-medium text-gray-900">{item.name}</td>
+                                    <td className="px-4 py-3 text-gray-600">{getParentName(item)}</td>
+                                    <td className="px-4 py-3">
+                                        {/* מחיקה אפשרית רק להתמחויות וסימפטומים כרגע */}
+                                        {activeTab !== 'professions' && (
+                                            <button 
+                                                onClick={() => handleDelete(item.id, activeTab === 'specialties' ? 'specialty' : 'symptom')}
+                                                className="text-red-500 hover:text-red-700 text-xs font-bold bg-red-50 px-2 py-1 rounded"
+                                            >
+                                                מחק
+                                            </button>
                                         )}
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
+                                        {activeTab === 'professions' && <span className="text-gray-400 text-xs">נעול</span>}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );
