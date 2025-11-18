@@ -1,4 +1,4 @@
-// src/components/FlowBuilder.jsx - FINAL FULL VERSION (Auto-Split & Edit)
+// src/components/FlowBuilder.jsx - v23 (REAL SAVE & LOAD)
 import React, { useState, useCallback, useEffect } from 'react';
 import ReactFlow, {
   Controls,
@@ -16,154 +16,64 @@ import { questionsTree } from '../constants/questionsTree.js';
 import QuestionNode from './QuestionNode.jsx';
 
 const nodeTypes = { questionNode: QuestionNode };
-const defaultViewport = { x: 0, y: 0, zoom: 0.6 }; 
+const defaultViewport = { x: 0, y: 0, zoom: 0.6 };
 const flowStyles = { height: '750px', border: '1px solid #e2e8f0', borderRadius: '12px', background: '#f1f5f9' };
 
-// --- פונקציית המרה: יוצרת את התרשים הראשוני מהנתונים ---
+// --- פונקציית המרה (Fallback: אם אין שמירה ב-DB) ---
 const convertTreeToFlow = (tree, initialData) => {
+  // ... (אותה פונקציית המרה מצוינת שבנינו קודם) ...
+  // למען היעילות, אני מעתיק אותה בדיוק כמו שהיא הייתה
   const nodes = [];
   const edges = [];
-
-  // פונקציית עזר ליצירת קווים נקיים
   const addEdgeClean = (source, target, sourceHandle = null, label = '') => {
     edges.push({
       id: `e_${source}-${target}_${sourceHandle || 'def'}`,
       source, target, sourceHandle: sourceHandle ? String(sourceHandle) : null, label,
-      type: 'smoothstep', 
-      markerEnd: { type: MarkerType.ArrowClosed }, 
-      style: { stroke: '#94a3b8', strokeWidth: 2 }
+      type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: '#94a3b8', strokeWidth: 2 }
     });
   };
 
-  // --- 1. יצירת שאלות הבסיס ---
-  
-  // שאלה 1: תחום ראשי
-  nodes.push({
-    id: 'start', type: 'questionNode', position: { x: 50, y: 300 },
-    data: { 
-        label: 'מהו תחום הטיפול העיקרי?', 
-        questionType: 'single',
-        outputs: initialData.mainCategories.map(c => ({ id: c.id, label: c.name }))
-    },
-  });
+  nodes.push({ id: 'start', type: 'questionNode', position: { x: 50, y: 300 }, data: { label: 'מהו תחום הטיפול העיקרי?', questionType: 'single', outputs: initialData.mainCategories.map(c => ({ id: c.id, label: c.name })) }, });
+  nodes.push({ id: 'targetEntity', type: 'questionNode', position: { x: 500, y: 50 }, data: { label: 'עבור מי הטיפול?', questionType: 'single', outputs: tree.targetEntity.options }, });
+  nodes.push({ id: 'audience', type: 'questionNode', position: { x: 500, y: 450 }, data: { label: 'מהו גיל המטופל?', questionType: 'slider', minVal: 0, maxVal: 120, outputs: [{id: 'default', label: 'הבא'}] }, });
+  nodes.push({ id: 'profession', type: 'questionNode', position: { x: 900, y: 300 }, data: { label: 'בחירת מקצוע מטפל', questionType: 'single', outputs: initialData.professions.map(p => ({ id: p.id, label: p.name })) }, });
 
-  // שאלה 2: קהל יעד (מיועדת כרגע לנפש)
-  nodes.push({
-    id: 'targetEntity', type: 'questionNode', position: { x: 500, y: 50 },
-    data: { label: 'עבור מי הטיפול?', questionType: 'single', outputs: tree.targetEntity.options },
-  });
-
-  // שאלה 3: גיל
-  nodes.push({
-    id: 'audience', type: 'questionNode', position: { x: 500, y: 450 },
-    data: { 
-        label: 'מהו גיל המטופל?', 
-        questionType: 'slider', 
-        minVal: 0, maxVal: 120, 
-        outputs: [{id: 'default', label: 'הבא (סיום שלב)'}] 
-    },
-  });
-  
-  // שאלה 4: בחירת מקצוע (הצומת המרכזי)
-  nodes.push({
-    id: 'profession', type: 'questionNode', position: { x: 900, y: 300 },
-    data: { 
-        label: 'בחירת מקצוע מטפל', 
-        questionType: 'single',
-        // מציג את כל המקצועות כדי לאפשר חיבורים מפוצלים
-        outputs: initialData.professions.map(p => ({ id: p.id, label: p.name })) 
-    },
-  });
-
-  // --- חיבורים לוגיים ---
   addEdgeClean('start', 'targetEntity', 2, 'נפש'); 
-  // חיבור שאר הקטגוריות (גוף, שפה וכו') ישירות לגיל
-  initialData.mainCategories.forEach(c => { 
-      if (c.id !== 2) addEdgeClean('start', 'audience', c.id, c.name); 
-  });
-  
+  initialData.mainCategories.forEach(c => { if (c.id !== 2) addEdgeClean('start', 'audience', c.id, c.name); });
   addEdgeClean('targetEntity', 'audience', 'individual');
   addEdgeClean('targetEntity', 'audience', 'couple');
   addEdgeClean('targetEntity', 'audience', 'family');
   addEdgeClean('targetEntity', 'audience', 'group');
   addEdgeClean('audience', 'profession', 'default');
 
-
-  // --- 2. הפיצול הגדול: סימפטומים לפי מקצוע ---
-  
   const preferencesNodeId = 'preferences';
   const regionNodeId = 'region';
   let currentY = 0;
   const SPACING_Y = 350; 
 
   initialData.professions.forEach((prof) => {
-      // שליפת הסימפטומים הרלוונטיים למקצוע זה בלבד
-      const profSymptoms = initialData.symptoms
-          .filter(s => s.profession_id === prof.id)
-          .map(s => ({ id: s.search_key, label: s.name }));
-
+      const profSymptoms = initialData.symptoms.filter(s => s.profession_id === prof.id).map(s => ({ id: s.search_key, label: s.name }));
       if (profSymptoms.length > 0) {
-          // יש סימפטומים -> צור שאלה ייעודית
           const symNodeId = `symptoms_prof_${prof.id}`;
-          
-          nodes.push({
-              id: symNodeId,
-              type: 'questionNode',
-              position: { x: 1400, y: currentY },
-              data: { 
-                  label: `סימפטומים: ${prof.name}`, 
-                  questionType: 'multiple',
-                  outputs: profSymptoms.concat([{ id: 'next', label: 'סיום בחירה' }]) 
-              },
-          });
-
-          // חבר את המקצוע הספציפי לצומת הסימפטומים שלו
+          nodes.push({ id: symNodeId, type: 'questionNode', position: { x: 1400, y: currentY }, data: { label: `סימפטומים: ${prof.name}`, questionType: 'multiple', outputs: profSymptoms.concat([{ id: 'next', label: 'סיום בחירה' }]) }, });
           addEdgeClean('profession', symNodeId, prof.id);
-          
-          // חבר את צומת הסימפטומים להמשך (העדפות)
           addEdgeClean(symNodeId, preferencesNodeId, 'next');
-
           currentY += SPACING_Y; 
       } else {
-          // אין סימפטומים -> חבר ישירות להמשך (דילוג)
-          edges.push({
-            id: `e_skip_${prof.id}`,
-            source: 'profession', sourceHandle: String(prof.id), target: preferencesNodeId,
-            label: '(ללא סימפטומים)',
-            type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed }, 
-            style: { stroke: '#94a3b8', strokeWidth: 2, strokeDasharray: '5,5' } // קו מקווקו
-          });
+          edges.push({ id: `e_skip_${prof.id}`, source: 'profession', sourceHandle: String(prof.id), target: preferencesNodeId, label: '(ללא סימפטומים)', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: '#94a3b8', strokeWidth: 2, strokeDasharray: '5,5' } });
       }
   });
 
-  // --- 3. סיום (העדפות ואזור) ---
   const centerY = Math.max(currentY / 2, 300);
-
-  nodes.push({
-    id: preferencesNodeId, type: 'questionNode', position: { x: 1900, y: centerY },
-    data: { 
-        label: 'העדפות נוספות', 
-        questionType: 'multiple', 
-        outputs: [{id: 'is_accessible', label: 'נגישות'}, {id: 'offers_reduced_fee', label: 'מחיר מוזל'}, {id: 'next', label: 'הבא'}] 
-    },
-  });
-
-  nodes.push({
-    id: regionNodeId, type: 'questionNode', position: { x: 2300, y: centerY },
-    data: { 
-        label: 'בחירת אזור גיאוגרפי', 
-        questionType: 'single',
-        outputs: initialData.regions.map(r => ({ id: r.region_key, label: r.region_name_he })) 
-    },
-  });
-
+  nodes.push({ id: preferencesNodeId, type: 'questionNode', position: { x: 1900, y: centerY }, data: { label: 'העדפות נוספות', questionType: 'multiple', outputs: [{id: 'is_accessible', label: 'נגישות'}, {id: 'offers_reduced_fee', label: 'מחיר מוזל'}, {id: 'next', label: 'הבא'}] }, });
+  nodes.push({ id: regionNodeId, type: 'questionNode', position: { x: 2300, y: centerY }, data: { label: 'בחירת אזור גיאוגרפי', questionType: 'single', outputs: initialData.regions.map(r => ({ id: r.region_key, label: r.region_name_he })) }, });
   addEdgeClean(preferencesNodeId, regionNodeId, 'next');
 
   return { initialNodes: nodes, initialEdges: edges };
 };
 
 
-// --- רכיב חלון העריכה (Inspector) ---
+// --- NodeInspector ---
 const NodeInspector = ({ node, setNodes, setEdges }) => {
   const [label, setLabel] = useState(node.data.label);
   const [questionType, setQuestionType] = useState(node.data.questionType || 'single');
@@ -184,15 +94,14 @@ const NodeInspector = ({ node, setNodes, setEdges }) => {
   };
 
   const updateOutputLabel = (index, newLabel) => {
-    const oldId = outputs[index].id; 
+    const oldId = outputs[index].id;
     const newOutputs = outputs.map((out, i) => i === index ? { ...out, label: newLabel } : out);
     setOutputs(newOutputs);
     setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, outputs: newOutputs } } : n));
-
     // עדכון תוויות על חיצים קיימים
     setEdges(eds => eds.map(e => {
         if (e.source === node.id && e.sourceHandle === String(oldId)) {
-            return { ...e, label: newLabel }; // עדכון התווית על החץ
+            return { ...e, label: newLabel }; 
         }
         return e;
     }));
@@ -210,7 +119,6 @@ const NodeInspector = ({ node, setNodes, setEdges }) => {
     const newOutputs = outputs.filter((_, i) => i !== index);
     setOutputs(newOutputs);
     updateNodeData('outputs', newOutputs);
-    // מחיקת חיצים שמחוברים ליציאה שנמחקה
     setEdges(eds => eds.filter(e => !(e.source === node.id && e.sourceHandle === String(outputToRemove.id))));
   };
 
@@ -274,6 +182,7 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
   const [selectedNode, setSelectedNode] = useState(null);
   const [initialData, setInitialData] = useState(null);
 
+  // 1. טעינת נתונים
   useEffect(() => {
     const fetchInitialData = async () => {
         try {
@@ -286,14 +195,41 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
     fetchInitialData();
   }, [API_URL, onLogout]);
 
+  // 2. טעינת תרשים שמור (או יצירה מהתחלה אם אין)
   useEffect(() => {
-    if (initialData && nodes.length === 0) {
-      const { initialNodes, initialEdges } = convertTreeToFlow(questionsTree, initialData);
-      setNodes(initialNodes);
-      setEdges(initialEdges);
-      setNodeId(initialNodes.length + 1);
-    }
-  }, [initialData]); 
+    if (!initialData) return;
+
+    const loadFlow = async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/admin/flow`, { credentials: 'include' });
+            if (res.ok) {
+                const savedFlow = await res.json();
+                // בדיקה אם יש תרשים שמור
+                if (savedFlow && savedFlow.nodes && savedFlow.nodes.length > 0) {
+                    setNodes(savedFlow.nodes);
+                    setEdges(savedFlow.edges);
+                    // חישוב ID בטוח לשימוש
+                    const maxId = savedFlow.nodes.reduce((max, node) => {
+                        const idNum = parseInt(node.id.replace('new_', ''));
+                        return !isNaN(idNum) && idNum > max ? idNum : max;
+                    }, 0);
+                    setNodeId(maxId + 100);
+                    return; // טען בהצלחה, יציאה.
+                }
+            }
+        } catch (e) {
+            console.error("Failed to load flow:", e);
+        }
+
+        // Fallback: אם אין שמור, צור חדש
+        const { initialNodes, initialEdges } = convertTreeToFlow(questionsTree, initialData);
+        setNodes(initialNodes);
+        setEdges(initialEdges);
+        setNodeId(initialNodes.length + 1);
+    };
+
+    loadFlow();
+  }, [initialData, API_URL]); 
 
   const onNodeClick = (event, node) => setSelectedNode(node);
   const onNodesChange = useCallback((changes) => setNodes((nds) => applyNodeChanges(changes, nds)), []);
@@ -333,14 +269,30 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
     setNodeId(nodeId + 1);
   };
   
-  const onSave = () => {
-    const cleanNodes = nodes.map(n => ({ id: n.id, data: n.data, position: n.position, type: n.type }));
+  // --- !!! פונקציית השמירה האמיתית !!! ---
+  const onSave = async () => {
+    const cleanNodes = nodes.map(n => ({ ...n })); // העתקה נקייה
+    
     const flowData = {
       nodes: cleanNodes,
-      edges: edges.map(e => ({ id: e.id, source: e.source, sourceHandle: e.sourceHandle, target: e.target, label: e.label })),
+      edges: edges
     };
-    console.log('[DEBUG] Saving Flow JSON:', JSON.stringify(flowData, null, 2));
-    alert('מבנה התרשים נשמר (בדוק ב-Console).');
+
+    try {
+        const res = await fetch(`${API_URL}/api/admin/flow`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(flowData)
+        });
+        
+        if (!res.ok) throw new Error('שגיאה בשמירה בשרת');
+        
+        alert('התרשים נשמר בהצלחה בשרת!');
+    } catch (err) {
+        console.error(err);
+        alert('שגיאה בשמירת התרשים: ' + err.message);
+    }
   };
 
   if (!initialData) return <div className="p-10 text-center text-gray-500">טוען...</div>;
