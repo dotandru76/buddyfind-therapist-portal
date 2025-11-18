@@ -1,10 +1,10 @@
-// src/components/AdminDashboard.jsx - SECURED (Cookie-based) & FIXED
+// src/components/AdminDashboard.jsx - FINAL FULL VERSION (With Cron Trigger)
 import React, { useState, useEffect, useCallback } from 'react';
 import moment from 'moment'; 
 import ActionModal from './ActionModal'; 
 import RegistrationsGraph from './RegistrationsGraph'; 
 import QuestionnaireManager from './QuestionnaireManager'; 
-import ProfessionManager from './ProfessionManager'; // לוודא שקיים
+import ProfessionManager from './ProfessionManager'; 
 
 // =================================================================
 // --- רכיבי עזר פנימיים ---
@@ -64,7 +64,6 @@ const SettingsManager = ({ API_URL, onBack, onLogout }) => {
     const fetchSettings = useCallback(async () => {
         setLoading(true); setError(null);
         try {
-            // --- תיקון אבטחה: שימוש ב-credentials ---
             const res = await fetch(`${API_URL}/api/admin/app-settings`, { 
                 credentials: 'include' 
             });
@@ -93,7 +92,6 @@ const SettingsManager = ({ API_URL, onBack, onLogout }) => {
         }
 
         try {
-            // --- תיקון אבטחה: שימוש ב-credentials ---
             const res = await fetch(`${API_URL}/api/admin/app-settings/${key}`, { 
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -114,6 +112,26 @@ const SettingsManager = ({ API_URL, onBack, onLogout }) => {
             setSaving(false);
         }
     };
+
+    // --- !!! פונקציה חדשה להפעלה ידנית !!! ---
+    const triggerCron = async () => {
+        if (!window.confirm('האם אתה בטוח? זה יבדוק את כל המטופלים וישלח מיילים למי שצריך.')) return;
+        setSaving(true);
+        try {
+            const res = await fetch(`${API_URL}/api/admin/cron/trigger`, { 
+                method: 'POST',
+                credentials: 'include'
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            alert(data.message);
+        } catch (err) {
+            alert('שגיאה: ' + err.message);
+        } finally {
+            setSaving(false);
+        }
+    };
+    // --- סוף הוספה ---
 
     if (loading) return <LoadingSpinner />;
     
@@ -163,7 +181,25 @@ const SettingsManager = ({ API_URL, onBack, onLogout }) => {
                     </div>
                 </div>
 
-                {/* הגדרת ימי ההמתנה לשליחת שאלון */}
+                {/* --- !!! אזור בדיקות חדש !!! --- */}
+                <div className="p-4 border border-purple-200 bg-purple-50 rounded-lg flex justify-between items-center">
+                    <div className="flex-1 ml-4">
+                        <h4 className="font-bold text-purple-800 text-lg">בדיקת שליחה (Cron)</h4>
+                        <p className="text-sm text-purple-600 mt-1">
+                            הפעלת בדיקה ידנית לשליחת שאלונים שממתינים (במקום לחכות ללילה).
+                        </p>
+                    </div>
+                    <button
+                        onClick={triggerCron}
+                        disabled={saving}
+                        className="px-4 py-2 bg-purple-600 text-white rounded-md font-bold hover:bg-purple-700 shadow-md"
+                    >
+                        🚀 הרץ בדיקה עכשיו
+                    </button>
+                </div>
+                {/* --- סוף הוספה --- */}
+
+                {/* הגדרת ימי ההמתנה */}
                 <div className="p-4 border border-gray-200 rounded-lg flex justify-between items-center">
                     <div className="flex-1">
                         <h4 className="font-semibold text-text-dark">ימי המתנה לשאלון (Questionnaire Delay)</h4>
@@ -237,7 +273,6 @@ const DataModal = ({ title, data, headers, keys, onClose, error }) => {
 // --- הרכיב הראשי: AdminDashboard ---
 // =================================================================
 
-// --- תיקון: הסרת authToken מה-props ---
 const AdminDashboard = ({ API_URL, user, onLogout }) => {
     const [stats, setStats] = useState({ 
         totalUsers: 0, 
@@ -258,7 +293,6 @@ const AdminDashboard = ({ API_URL, user, onLogout }) => {
     const fetchAdminStats = useCallback(async () => {
         setLoading(true); setError(null);
         try {
-            // --- תיקון אבטחה: שימוש ב-credentials ---
             const statsRes = await fetch(`${API_URL}/api/admin/stats`, { 
                 credentials: 'include' 
             });
@@ -297,7 +331,6 @@ const AdminDashboard = ({ API_URL, user, onLogout }) => {
 
             {adminView === 'main' ? (
                 <>
-                    {/* 1. רכיבי הפעולה - 5 כרטיסיות */}
                     <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
                         <ActionCard title="חוות דעת ממתינות" value={stats.totalPendingReviews} color="yellow" onClick={() => handleActionCardClick('reviews')} />
                         <ActionCard title="ערעורים לטיפול" value={stats.totalDisputedReviews} color="red" onClick={() => handleActionCardClick('disputed')} />
@@ -306,14 +339,11 @@ const AdminDashboard = ({ API_URL, user, onLogout }) => {
                         <ActionCard title="ניהול שאלונים" value="+" color="purple" onClick={() => setAdminView('questionnaires')} />
                     </div>
                     
-                    {/* 3. אזור הגרפים */}
                     <div className="p-6 bg-white rounded-lg shadow">
                         <h3 className="text-xl font-bold text-text-dark mb-4 border-b pb-2">נרשמים חדשים (30 יום אחרונים)</h3>
-                        {/* --- תיקון: העברת props נכונים ל-RegistrationsGraph --- */}
                         <RegistrationsGraph onLogout={onLogout} API_URL={API_URL} />
                     </div>
                     
-                    {/* 4. ניהול הגדרות */}
                     <div className="p-6 bg-white rounded-lg shadow space-y-6">
                         <h3 className="text-xl font-bold text-text-dark border-b pb-2">הגדרות מערכת</h3>
                          <button onClick={() => setAdminView('settings')} className="py-2 px-4 bg-gray-500 text-white rounded-lg text-sm font-semibold hover:bg-gray-600 transition">
@@ -349,7 +379,7 @@ const AdminDashboard = ({ API_URL, user, onLogout }) => {
              {['reviews', 'disputed', 'professionals', 'users'].includes(currentModal) && (
                  <ActionModal
                     modalType={currentModal}
-                    onLogout={onLogout} // --- תיקון: העברת onLogout ---
+                    onLogout={onLogout} 
                     API_URL={API_URL}
                     onClose={() => setCurrentModal(null)}
                     onActionComplete={handleActionComplete}
