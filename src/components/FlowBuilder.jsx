@@ -1,4 +1,4 @@
-// src/components/FlowBuilder.jsx - AUTOMATIC SPLIT VERSION
+// src/components/FlowBuilder.jsx - v19 (Automatic Split & Full Edit)
 import React, { useState, useCallback, useEffect } from 'react';
 import ReactFlow, {
   Controls,
@@ -16,180 +16,240 @@ import { questionsTree } from '../constants/questionsTree.js';
 import QuestionNode from './QuestionNode.jsx';
 
 const nodeTypes = { questionNode: QuestionNode };
-const defaultViewport = { x: 0, y: 0, zoom: 0.65 };
-const flowStyles = { height: '750px', border: '1px solid #ddd', borderRadius: '8px', background: '#f8fafc' };
+const defaultViewport = { x: 0, y: 0, zoom: 0.6 }; 
+const flowStyles = { height: '750px', border: '1px solid #e2e8f0', borderRadius: '12px', background: '#f1f5f9' };
 
-// --- פונקציית המרה שמפצלת את הסימפטומים לפי מקצוע ---
+// --- פונקציית המרה שמייצרת את ה"אבחון של היום" אבל מפוצל ---
 const convertTreeToFlow = (tree, initialData) => {
   const nodes = [];
   const edges = [];
 
-  // 1. יצירת הצמתים הקבועים (התחלה, קהל יעד, מקצוע)
+  // --- 1. שאלות בסיס (התחלה) ---
   
-  // צומת התחלה
+  // שאלה 1: תחום ראשי
   nodes.push({
-    id: 'start',
-    type: 'questionNode',
-    position: { x: 50, y: 300 },
+    id: 'start', type: 'questionNode', position: { x: 50, y: 300 },
     data: { 
         label: 'מהו תחום הטיפול העיקרי?', 
-        outputs: [
-            { id: 2, label: 'טיפולים רגשיים (נפש)' }, 
-            { id: 1, label: 'טיפולים פיזיים (גוף)' },
-            { id: 3, label: 'שפה ותקשורת' },
-            { id: 4, label: 'תזונה' }
-        ] 
+        questionType: 'single',
+        // טוען את הקטגוריות האמיתיות מהשרת
+        outputs: initialData.mainCategories.map(c => ({ id: c.id, label: c.name }))
     },
   });
 
-  // צומת קהל יעד (מחובר רק לנפש כרגע, לפי הלוגיקה הקיימת)
+  // שאלה 2: קהל יעד
   nodes.push({
-    id: 'targetEntity',
-    type: 'questionNode',
-    position: { x: 450, y: 100 },
-    data: { 
-        label: 'עבור מי הטיפול?', 
-        outputs: tree.targetEntity.options 
-    },
+    id: 'targetEntity', type: 'questionNode', position: { x: 500, y: 50 },
+    data: { label: 'עבור מי הטיפול?', questionType: 'single', outputs: tree.targetEntity.options },
   });
 
-  // צומת גיל (משותף לכולם)
+  // שאלה 3: גיל
   nodes.push({
-    id: 'audience',
-    type: 'questionNode',
-    position: { x: 450, y: 500 },
-    data: { 
-        label: 'מהו גיל המטופל? (סליידר)', 
-        outputs: [{ id: 'default', label: 'המשך' }] 
-    },
+    id: 'audience', type: 'questionNode', position: { x: 500, y: 450 },
+    data: { label: 'מהו גיל המטופל?', questionType: 'slider', outputs: [{id: 'default', label: 'הבא'}] },
   });
   
-  // צומת בחירת מקצוע (מציג את כל המקצועות)
+  // שאלה 4: בחירת מקצוע (הצומת המרכזי)
   nodes.push({
-    id: 'profession',
-    type: 'questionNode',
-    position: { x: 850, y: 300 },
+    id: 'profession', type: 'questionNode', position: { x: 900, y: 300 },
     data: { 
-        label: 'בחירת מקצוע ספציפי', 
+        label: 'בחירת מקצוע מטפל', 
+        questionType: 'single',
+        // רשימת כל המקצועות כדי לאפשר פיצול
         outputs: initialData.professions.map(p => ({ id: p.id, label: p.name })) 
     },
   });
 
-  // --- חיבורי הבסיס (כמו בעץ הנוכחי) ---
-  const addEdgeClean = (source, target, sourceHandle = null, label = '') => {
+  // --- חיבורים ראשוניים ---
+  const addEdgeClean = (source, target, sourceHandle, label = '') => {
     edges.push({
-      id: `e_${source}-${target}_${sourceHandle || ''}`,
+      id: `e_${source}-${target}_${sourceHandle || 'def'}`,
       source, target, sourceHandle: sourceHandle ? String(sourceHandle) : null, label,
-      type: 'smoothstep', 
-      markerEnd: { type: MarkerType.ArrowClosed }, 
-      style: { stroke: '#94a3b8', strokeWidth: 2 }
+      type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: '#64748b', strokeWidth: 2 }
     });
   };
 
-  addEdgeClean('start', 'targetEntity', 2); // נפש -> עבור מי
-  addEdgeClean('start', 'audience', 1); // גוף -> גיל
-  addEdgeClean('start', 'audience', 3); // שפה -> גיל
-  addEdgeClean('start', 'audience', 4); // תזונה -> גיל
+  // לוגיקה קיימת: נפש (2) -> עבור מי. גוף (1) ושאר -> גיל.
+  addEdgeClean('start', 'targetEntity', 2, 'נפש'); 
+  initialData.mainCategories.forEach(c => {
+      if (c.id !== 2) addEdgeClean('start', 'audience', c.id);
+  });
   
+  // כולם מתנקזים למקצוע בסוף
   addEdgeClean('targetEntity', 'audience', 'individual');
   addEdgeClean('targetEntity', 'audience', 'couple');
   addEdgeClean('targetEntity', 'audience', 'family');
   addEdgeClean('targetEntity', 'audience', 'group');
-
   addEdgeClean('audience', 'profession', 'default');
 
 
-  // --- 2. הפיצול הגדול: יצירת צומת סימפטומים לכל מקצוע ---
+  // --- 2. הפיצול הגדול: יצירת שאלון סימפטומים ייחודי לכל מקצוע ---
   
-  // מרכז הצמתים הסופיים (העדפות ואזור) כדי שיהיה לאן לחבר
-  const preferencesNodeId = 'preferences';
-  const regionNodeId = 'region';
-
-  // נחשב מיקום אנכי דינמי כדי שהמלבנים לא יעלו אחד על השני
-  let currentY = 0;
-  const SPACING_Y = 400; // מרווח בין קבוצות סימפטומים
+  const preferencesNodeId = 'preferences'; // צומת יעד משותף
+  let currentY = 0; // לסידור אנכי
+  const SPACING_Y = 350; 
 
   initialData.professions.forEach((prof) => {
-      // מצא את הסימפטומים ששייכים למקצוע הזה
+      // שליפת הסימפטומים הרלוונטיים למקצוע זה בלבד
       const profSymptoms = initialData.symptoms
           .filter(s => s.profession_id === prof.id)
           .map(s => ({ id: s.search_key, label: s.name }));
 
       if (profSymptoms.length > 0) {
-          // --- יש סימפטומים: צור צומת ייעודי ---
+          // יש סימפטומים -> צור שאלה ייעודית
           const symNodeId = `symptoms_prof_${prof.id}`;
           
           nodes.push({
               id: symNodeId,
               type: 'questionNode',
-              position: { x: 1300, y: currentY },
+              position: { x: 1400, y: currentY },
               data: { 
-                  label: `סימפטומים: ${prof.name}`, // שם המקצוע בכותרת
-                  outputs: profSymptoms.concat([{ id: 'default', label: 'המשך (ללא בחירה)' }]) 
+                  label: `סימפטומים: ${prof.name}`, // כותרת דינמית
+                  questionType: 'multiple',
+                  outputs: profSymptoms.concat([{ id: 'next', label: 'הבא (סיום בחירה)' }]) 
               },
           });
 
-          // חבר את המקצוע הספציפי לצומת הסימפטומים שלו
+          // חבר את המקצוע הזה לשאלון הסימפטומים שלו
           addEdgeClean('profession', symNodeId, prof.id);
           
-          // חבר את צומת הסימפטומים להעדפות (המשך הזרימה)
-          // מחברים את ה-"המשך" וגם את כל הסימפטומים (לוגית כולם מובילים לאותו מקום כרגע)
-          addEdgeClean(symNodeId, preferencesNodeId, 'default');
+          // חבר את "הבא" להמשך
+          addEdgeClean(symNodeId, preferencesNodeId, 'next');
 
-          currentY += SPACING_Y; // רד למטה למקצוע הבא
+          currentY += SPACING_Y; 
       } else {
-          // --- אין סימפטומים: דלג ישר להעדפות ---
-          // קו מקווקו ואדום לסימון דילוג
+          // אין סימפטומים -> דלג ישר להעדפות
           edges.push({
             id: `e_skip_${prof.id}`,
             source: 'profession', sourceHandle: String(prof.id), target: preferencesNodeId,
-            label: '(ללא סימפטומים)',
-            type: 'smoothstep', 
-            markerEnd: { type: MarkerType.ArrowClosed }, 
-            style: { stroke: '#f87171', strokeDasharray: '5,5' },
-            animated: true
+            label: '(ללא שאלון סימפטומים)',
+            type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: '#f87171', strokeDasharray: '5,5' }
           });
       }
   });
 
-  // 3. צמתים סופיים (ממוקמים באמצע הגובה הכולל)
-  const centerY = currentY / 2;
+  // --- 3. סיום (העדפות ואזור) ---
+  const centerY = Math.max(currentY / 2, 300);
 
   nodes.push({
-    id: preferencesNodeId,
-    type: 'questionNode',
-    position: { x: 1700, y: centerY },
+    id: preferencesNodeId, type: 'questionNode', position: { x: 1900, y: centerY },
     data: { 
-        label: 'האם יש דרישות נוספות?', 
-        outputs: [{id: 'is_accessible', label: 'נגישות'}, {id: 'offers_reduced_fee', label: 'מחיר מוזל'}, {id: 'default', label: 'המשך'}] 
+        label: 'העדפות נוספות', 
+        questionType: 'multiple', 
+        outputs: [{id: 'is_accessible', label: 'נגישות'}, {id: 'offers_reduced_fee', label: 'מחיר מוזל'}, {id: 'next', label: 'הבא'}] 
     },
   });
 
   nodes.push({
-    id: regionNodeId,
-    type: 'questionNode',
-    position: { x: 2100, y: centerY },
+    id: 'region', type: 'questionNode', position: { x: 2300, y: centerY },
     data: { 
         label: 'בחירת אזור גיאוגרפי', 
+        questionType: 'single',
         outputs: initialData.regions.map(r => ({ id: r.region_key, label: r.region_name_he })) 
     },
   });
 
-  addEdgeClean(preferencesNodeId, regionNodeId, 'default');
-  addEdgeClean(preferencesNodeId, regionNodeId, 'is_accessible');
-  addEdgeClean(preferencesNodeId, regionNodeId, 'offers_reduced_fee');
+  addEdgeClean(preferencesNodeId, 'region', 'next');
 
   return { initialNodes: nodes, initialEdges: edges };
 };
 
 
-// --- העטיפה הראשית (ללא שינוי מהותי, רק וידוא שהכל מחובר) ---
+// --- רכיב חלון העריכה (Inspector) ---
+const NodeInspector = ({ node, setNodes, setEdges }) => {
+  const [label, setLabel] = useState(node.data.label);
+  const [questionType, setQuestionType] = useState(node.data.questionType || 'single');
+  const [outputs, setOutputs] = useState(node.data.outputs || []);
+
+  useEffect(() => {
+    setLabel(node.data.label);
+    setQuestionType(node.data.questionType || 'single');
+    setOutputs(node.data.outputs || []);
+  }, [node]); 
+
+  const updateNodeData = (key, value) => {
+    setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, [key]: value } } : n));
+  };
+
+  const updateOutputLabel = (index, newLabel) => {
+    const newOutputs = [...outputs];
+    newOutputs[index] = { ...newOutputs[index], label: newLabel };
+    setOutputs(newOutputs);
+    updateNodeData('outputs', newOutputs);
+  };
+  
+  const addOutput = () => {
+    const newId = `opt_${Date.now()}`;
+    const newOutputs = [...outputs, { id: newId, label: 'אופציה חדשה' }];
+    setOutputs(newOutputs);
+    updateNodeData('outputs', newOutputs);
+  };
+  
+  const deleteOutput = (index) => {
+    const newOutputs = outputs.filter((_, i) => i !== index);
+    setOutputs(newOutputs);
+    updateNodeData('outputs', newOutputs);
+  };
+
+  return (
+    <div style={{ width: '320px', background: 'white', borderRight: '1px solid #e5e7eb', padding: '24px', direction: 'rtl', textAlign: 'right', overflowY: 'auto', boxShadow: '-4px 0 15px rgba(0,0,0,0.05)', zIndex: 10 }}>
+      <h4 style={{ fontWeight: '800', fontSize: '18px', color: '#1e293b', marginBottom: '20px', borderBottom: '2px solid #f1f5f9', paddingBottom: '10px' }}>הגדרות שאלה</h4>
+      
+      <div style={{ marginBottom: '20px' }}>
+        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>נוסח השאלה</label>
+        <textarea
+          value={label}
+          onChange={(e) => { setLabel(e.target.value); updateNodeData('label', e.target.value); }}
+          rows={2}
+          style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '10px', fontSize: '14px', resize: 'none', outline: 'none' }}
+        />
+      </div>
+
+      <div style={{ marginBottom: '20px' }}>
+        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>סוג השאלה</label>
+        <select
+            value={questionType}
+            onChange={(e) => { setQuestionType(e.target.value); updateNodeData('questionType', e.target.value); }}
+            style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '8px', fontSize: '14px', background: 'white' }}
+        >
+            <option value="single">בחירה יחידה (Single Choice)</option>
+            <option value="multiple">בחירה מרובה (Multiple Choice)</option>
+            <option value="slider">סליידר / טווח (Slider)</option>
+        </select>
+      </div>
+
+      <div>
+        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '10px' }}>תשובות / יציאות</label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {outputs.map((output, index) => (
+            <div key={output.id || index} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <div style={{ background: '#f1f5f9', padding: '6px', borderRadius: '6px', flexGrow: 1 }}>
+                  <input
+                    type="text"
+                    value={output.label}
+                    onChange={(e) => updateOutputLabel(index, e.target.value)}
+                    style={{ width: '100%', border: 'none', background: 'transparent', fontSize: '13px', outline: 'none' }}
+                  />
+              </div>
+              <button onClick={() => deleteOutput(index)} style={{ background: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '6px', width: '32px', height: '32px', cursor: 'pointer' }}>✕</button>
+            </div>
+          ))}
+        </div>
+        <button onClick={addOutput} style={{ width: '100%', marginTop: '15px', padding: '10px', background: '#eff6ff', color: '#3b82f6', border: '1px dashed #3b82f6', borderRadius: '8px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>+ הוסף תשובה</button>
+      </div>
+    </div>
+  );
+};
+
+// --- FlowBuilderWrapper ---
 const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
+  const [nodeId, setNodeId] = useState(1); 
+  const [selectedNode, setSelectedNode] = useState(null);
   const [initialData, setInitialData] = useState(null);
-  
-  // טעינת נתונים
+
+  // טעינת הנתונים פעם אחת
   useEffect(() => {
     const fetchInitialData = async () => {
         try {
@@ -202,39 +262,103 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
     fetchInitialData();
   }, [API_URL, onLogout]);
 
-  // הפעלת ההמרה כשיש נתונים
+  // בניית התרשים הראשוני (חד פעמי)
   useEffect(() => {
-    if (initialData) {
+    if (initialData && nodes.length === 0) {
       const { initialNodes, initialEdges } = convertTreeToFlow(questionsTree, initialData);
       setNodes(initialNodes);
       setEdges(initialEdges);
+      setNodeId(initialNodes.length + 1);
     }
   }, [initialData]); 
 
+  const onNodeClick = (event, node) => setSelectedNode(node);
   const onNodesChange = useCallback((changes) => setNodes((nds) => applyNodeChanges(changes, nds)), []);
   const onEdgesChange = useCallback((changes) => setEdges((eds) => applyEdgeChanges(changes, eds)), []);
+  
+  const onNodesDelete = useCallback((deleted) => {
+      setEdges((eds) => deleted.reduce((acc, node) => acc.filter((edge) => edge.source !== node.id && edge.target !== node.id), eds));
+      if (deleted.find(n => n.id === selectedNode?.id)) setSelectedNode(null);
+  }, [selectedNode]);
+  
+  const onConnect = useCallback((connection) => {
+      const sourceNode = nodes.find(n => n.id === connection.source);
+      const sourceHandleLabel = sourceNode.data.outputs.find(o => o.id === connection.sourceHandle)?.label || '';
+      const newEdge = { 
+        ...connection, 
+        label: sourceHandleLabel, 
+        type: 'smoothstep',
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style: { stroke: '#94a3b8', strokeWidth: 2 }
+      };
+      setEdges((eds) => addEdge(newEdge, eds))
+    }, [nodes]);
 
-  if (!initialData) return <div className="p-10 text-center">טוען נתונים...</div>;
+  const addNode = () => {
+    const newId = `new_${nodeId}`;
+    const newNode = {
+      id: newId,
+      data: { 
+        label: `שאלה חדשה ${nodeId}`,
+        questionType: 'single', 
+        outputs: [{ id: 'opt1', label: 'כן' }, { id: 'opt2', label: 'לא' }],
+      },
+      position: { x: 50, y: 50 },
+      type: 'questionNode'
+    };
+    setNodes((nds) => nds.concat(newNode));
+    setNodeId(nodeId + 1);
+  };
+  
+  const onSave = () => {
+    const flowData = {
+      nodes: nodes.map(n => ({ id: n.id, data: n.data, position: n.position, type: n.type })),
+      edges: edges.map(e => ({ id: e.id, source: e.source, sourceHandle: e.sourceHandle, target: e.target, label: e.label })),
+    };
+    console.log('[DEBUG] Saving Flow JSON:', JSON.stringify(flowData, null, 2));
+    alert('מבנה התרשים נשמר (בדוק ב-Console). כעת ניתן לחבר למסד נתונים.');
+  };
+
+  if (!initialData) return <div className="p-10 text-center text-gray-500">טוען נתוני שאלון...</div>;
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow h-full flex flex-col">
-      <div className="flex justify-between items-center mb-4 border-b pb-3">
-         <h3 className="text-2xl font-bold text-text-dark">תרשים זרימת האבחון (מפוצל לפי מקצועות)</h3>
-         <div className="bg-blue-50 text-blue-700 px-3 py-1 rounded text-sm">מצב צפייה וסידור</div>
+    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-full flex flex-col">
+      <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-100">
+        <h3 className="text-xl font-bold text-gray-800">עורך שאלון האבחון</h3>
+        <div className="flex gap-3">
+            <button onClick={addNode} className="px-4 py-2 bg-green-50 text-green-700 rounded-lg text-sm font-bold hover:bg-green-100 transition border border-green-200">+ שאלה חדשה</button>
+            <button onClick={onSave} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition shadow-sm">שמור שינויים</button>
+        </div>
       </div>
-      <div style={{ flexGrow: 1, ...flowStyles }}>
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          nodeTypes={nodeTypes}
-          defaultViewport={defaultViewport}
-          fitView
-        >
-          <Controls />
-          <Background color="#cbd5e1" gap={20} />
-        </ReactFlow>
+
+      <div className="flex-grow flex relative" style={{ minHeight: '600px' }}>
+        <div style={{ flexGrow: 1, ...flowStyles }}>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onNodesDelete={onNodesDelete} 
+            onConnect={onConnect}
+            nodeTypes={nodeTypes}
+            defaultViewport={defaultViewport}
+            onNodeClick={onNodeClick}
+            onPaneClick={() => setSelectedNode(null)} 
+            deleteKeyCode={['Backspace', 'Delete']} 
+          >
+            <Controls />
+            <Background color="#cbd5e1" gap={20} />
+          </ReactFlow>
+        </div>
+        
+        {selectedNode && (
+          <NodeInspector 
+            key={selectedNode.id} 
+            node={selectedNode} 
+            setNodes={setNodes} 
+            setEdges={setEdges}
+          />
+        )}
       </div>
     </div>
   );
