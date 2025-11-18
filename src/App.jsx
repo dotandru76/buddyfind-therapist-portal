@@ -1,4 +1,6 @@
-// src/App.jsx (של buddyfind-therapist-portal) - v15 (Synced)
+// src/App.jsx (של buddyfind-therapist-portal)
+// --- גרסה V16 (כולל SymptomMapper) ---
+
 import React, { useState, useEffect, useCallback } from 'react';
 import LoginModal from './components/LoginModal';
 import RegisterModal from './components/RegisterModal';
@@ -9,7 +11,8 @@ import LogContactForm from './components/LogContactForm';
 import LoadingSpinner from './components/LoadingSpinner';
 import AlertMessage from './components/AlertMessage';
 import FlowBuilder from './components/FlowBuilder'; 
-import ProfessionManager from './components/ProfessionManager'; // <-- 1. ייבוא
+import ProfessionManager from './components/ProfessionManager'; 
+import SymptomMapper from './components/SymptomMapper'; // <-- !!! 1. ייבוא חדש !!!
 
 const API_URL = 'https://buddyfind-api.onrender.com';
 const LOGO_URL = 'https://res.cloudinary.com/dermarx8t/image/upload/v1761900572/WellMatch_logo_ktdyfy.png';
@@ -21,234 +24,91 @@ const App = () => {
     const [authError, setAuthError] = useState(null);
     const [nav, setNav] = useState('profile'); 
 
-    // --- פונקציית התנתקות ---
     const handleLogout = useCallback(async () => {
         setLoading(true);
         try {
-            await fetch(`${API_URL}/api/logout`, { 
-                method: 'POST',
-                credentials: 'include' 
-            });
-        } catch (err) {
-            console.error("Logout failed:", err);
-        } finally {
-            setUser(null);
-            setView('login');
-            setNav('profile');
-            setLoading(false);
-            setAuthError(null);
-        }
+            await fetch(`${API_URL}/api/logout`, { method: 'POST', credentials: 'include' });
+        } catch (err) { console.error(err); } 
+        finally { setUser(null); setView('login'); setNav('profile'); setLoading(false); }
     }, []);
 
-    // --- טעינת פרטי משתמש (בדיקת סשן) ---
     const fetchUserProfile = useCallback(async () => {
         setLoading(true); setAuthError(null);
         try {
-            const res = await fetch(`${API_URL}/api/professionals/me`, {
-                credentials: 'include' 
-            });
-            if (!res.ok) {
-                if (res.status === 401 || res.status === 403) {
-                    throw new Error('לא מחובר'); 
-                }
-                const data = await res.json();
-                throw new Error(data.error || 'שגיאה בטעינת פרופיל');
-            }
+            const res = await fetch(`${API_URL}/api/professionals/me`, { credentials: 'include' });
+            if (!res.ok) { if (res.status === 401) throw new Error('לא מחובר'); const data = await res.json(); throw new Error(data.error); }
             const data = await res.json();
             setUser(data);
-            if (data.user_type === 'admin') {
-                setNav('admin'); 
-            } else {
-                setNav('profile'); 
-            }
-        } catch (err) {
-            setUser(null);
-            setView('login');
-        } finally {
-            setLoading(false);
-        }
+            if (data.user_type === 'admin') setNav('admin'); else setNav('profile'); 
+        } catch (err) { setUser(null); setView('login'); } finally { setLoading(false); }
     }, []);
 
-    useEffect(() => {
-        fetchUserProfile();
-    }, [fetchUserProfile]);
+    useEffect(() => { fetchUserProfile(); }, [fetchUserProfile]);
 
-
-    // --- טיפול באימות ---
     const handleAuth = async (credentials, isRegister = false) => {
         setLoading(true); setAuthError(null);
         const endpoint = isRegister ? '/api/register' : '/api/login';
         try {
             const res = await fetch(`${API_URL}${endpoint}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(credentials),
-                credentials: 'include' 
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(credentials), credentials: 'include' 
             });
             const data = await res.json();
-            if (!res.ok) {
-                throw new Error(data.error || 'הפעולה נכשלה');
-            }
-
-            if (isRegister) {
-                alert('הרשמה בוצעה בהצלחה! אנא התחבר.');
-                setView('login');
-            } else {
-                if (data.user_type !== 'professional' && data.user_type !== 'admin') {
-                    throw new Error('גישה מורשית למטפלים ומנהלים בלבד.');
-                }
-                await fetchUserProfile();
-            }
-        } catch (err) {
-            setAuthError(err.message);
-        } finally {
-            setLoading(false);
-        }
+            if (!res.ok) throw new Error(data.error || 'פעולה נכשלה');
+            if (isRegister) { alert('הרשמה הצליחה!'); setView('login'); } 
+            else { if (data.user_type !== 'professional' && data.user_type !== 'admin') throw new Error('גישה נדחתה.'); await fetchUserProfile(); }
+        } catch (err) { setAuthError(err.message); } finally { setLoading(false); }
     };
 
-    // --- ניווט פנימי ---
     const renderNav = () => {
         if (!user) return null;
         const isAdmin = user.user_type === 'admin';
         const hasProfile = user.id !== null; 
 
         return (
-            <nav className="flex justify-center gap-6 mb-8 border-b border-gray-200">
+            <nav className="flex justify-center gap-6 mb-8 border-b border-gray-200 flex-wrap">
                 {isAdmin && (
-                    <button 
-                        onClick={() => setNav('admin')}
-                        className={`py-4 px-2 text-sm font-semibold ${nav === 'admin' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        לוח בקרה
-                    </button>
-                )}
-
-                {/* --- 2. קישור למסך 1 --- */}
-                {isAdmin && (
-                    <button 
-                        onClick={() => setNav('data_manager')}
-                        className={`py-4 px-2 text-sm font-semibold ${nav === 'data_manager' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        ניהול נתונים (CMS)
-                    </button>
-                )}
-
-                {/* --- 3. קישור למסך 2 --- */}
-                {isAdmin && (
-                    <button 
-                        onClick={() => setNav('flow_builder')}
-                        className={`py-4 px-2 text-sm font-semibold ${nav === 'flow_builder' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        עורך שאלון אבחון
-                    </button>
+                    <>
+                        <button onClick={() => setNav('admin')} className={`py-4 px-2 text-sm font-semibold ${nav === 'admin' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}>לוח בקרה</button>
+                        <button onClick={() => setNav('data_manager')} className={`py-4 px-2 text-sm font-semibold ${nav === 'data_manager' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}>ניהול נתונים</button>
+                        <button onClick={() => setNav('flow_builder')} className={`py-4 px-2 text-sm font-semibold ${nav === 'flow_builder' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}>עורך שאלון</button>
+                        
+                        {/* --- !!! 2. כפתור חדש למיפוי !!! --- */}
+                        <button onClick={() => setNav('mapper')} className={`py-4 px-2 text-sm font-semibold ${nav === 'mapper' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}>מנוע התאמה (מיפוי)</button>
+                    </>
                 )}
                 
                 {hasProfile && (
                     <>
-                        <button 
-                            onClick={() => setNav('profile')}
-                            className={`py-4 px-2 text-sm font-semibold ${nav === 'profile' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            עריכת פרופיל
-                        </button>
-                        <button 
-                            onClick={() => setNav('reviews')}
-                            className={`py-4 px-2 text-sm font-semibold ${nav === 'reviews' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            ניהול חוות דעת
-                        </button>
-                        <button 
-                            onClick={() => setNav('log_contact')}
-                            className={`py-4 px-2 text-sm font-semibold ${nav === 'log_contact' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            דיווח תחילת טיפול
-                        </button>
+                        <button onClick={() => setNav('profile')} className={`py-4 px-2 text-sm font-semibold ${nav === 'profile' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}>עריכת פרופיל</button>
+                        <button onClick={() => setNav('reviews')} className={`py-4 px-2 text-sm font-semibold ${nav === 'reviews' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}>ניהול חוות דעת</button>
+                        <button onClick={() => setNav('log_contact')} className={`py-4 px-2 text-sm font-semibold ${nav === 'log_contact' ? 'text-primary-blue border-b-2 border-primary-blue' : 'text-gray-500 hover:text-gray-700'}`}>דיווח תחילת טיפול</button>
                     </>
                 )}
             </nav>
         );
     };
 
-    // --- הצגת תוכן ---
     const renderContent = () => {
-        if (loading) {
-            return <div className="text-center p-10"><LoadingSpinner /></div>;
+        if (loading) return <div className="text-center p-10"><LoadingSpinner /></div>;
+        if (!user) {
+            return <div>
+                {authError && <AlertMessage type="error" message={authError} onDismiss={() => setAuthError(null)} />}
+                {view === 'login' ? <LoginModal handleLogin={handleAuth} loading={loading} onRegisterClick={() => setView('register')} authError={authError} /> : <RegisterModal handleRegister={(creds) => handleAuth(creds, true)} loading={loading} onLoginClick={() => setView('login')} authError={authError} />}
+            </div>;
         }
 
-        if (!user) { // אם אין משתמש, הצג טפסי אימות
-            return (
-                <div>
-                    {authError && <AlertMessage type="error" message={authError} onDismiss={() => setAuthError(null)} />}
-                    {view === 'login' ? (
-                        <LoginModal 
-                            handleLogin={handleAuth} 
-                            loading={loading} 
-                            onRegisterClick={() => { setView('register'); setAuthError(null); }}
-                            authError={authError} 
-                        />
-                    ) : (
-                        <RegisterModal 
-                            handleRegister={(creds) => handleAuth(creds, true)} 
-                            loading={loading} 
-                            onLoginClick={() => { setView('login'); setAuthError(null); }} 
-                            authError={authError} 
-                        />
-                    )}
-                </div>
-            );
-        }
-
-        // --- תצוגה למשתמש מחובר (מטפל/מנהל) ---
         return (
             <div className="w-full">
                 {renderNav()}
+                {user.id && nav === 'profile' && <ProfileEditor API_URL={API_URL} user={user} onUpdateSuccess={() => fetchUserProfile()} onLogout={handleLogout} />}
+                {user.id && nav === 'reviews' && <TherapistReviewManager API_URL={API_URL} onLogout={handleLogout} />}
+                {user.id && nav === 'log_contact' && <LogContactForm API_URL={API_URL} user={user} onLogout={handleLogout} />}
+                {user.user_type === 'admin' && nav === 'admin' && <AdminDashboard API_URL={API_URL} user={user} onLogout={handleLogout} />}
+                {user.user_type === 'admin' && nav === 'flow_builder' && <FlowBuilder API_URL={API_URL} onLogout={handleLogout} />}
+                {user.user_type === 'admin' && nav === 'data_manager' && <ProfessionManager API_URL={API_URL} onLogout={handleLogout} />}
                 
-                {user.id && nav === 'profile' && (
-                    <ProfileEditor 
-                        API_URL={API_URL} 
-                        user={user}
-                        onUpdateSuccess={() => fetchUserProfile()} 
-                        onLogout={handleLogout}
-                    />
-                )}
-                
-                {user.id && nav === 'reviews' && (
-                    <TherapistReviewManager 
-                        API_URL={API_URL} 
-                        onLogout={handleLogout}
-                    />
-                )}
-                
-                {user.id && nav === 'log_contact' && (
-                    <LogContactForm 
-                        API_URL={API_URL} 
-                        user={user}
-                        onLogout={handleLogout} 
-                    />
-                )}
-                
-                {user.user_type === 'admin' && nav === 'admin' && (
-                     <AdminDashboard 
-                        API_URL={API_URL} 
-                        user={user}
-                        onLogout={handleLogout}
-                    />
-                )}
-
-                {user.user_type === 'admin' && nav === 'flow_builder' && (
-                     <FlowBuilder 
-                        API_URL={API_URL}
-                        onLogout={handleLogout}
-                     />
-                )}
-                
-                {/* --- 4. הצגת מסך 1 --- */}
-                {user.user_type === 'admin' && nav === 'data_manager' && (
-                     <ProfessionManager 
-                        API_URL={API_URL}
-                        onLogout={handleLogout}
-                     />
-                )}
+                {/* --- !!! 3. הצגת הרכיב החדש !!! --- */}
+                {user.user_type === 'admin' && nav === 'mapper' && <SymptomMapper API_URL={API_URL} onLogout={handleLogout} />}
             </div>
         );
     };
@@ -258,20 +118,10 @@ const App = () => {
             <header className="bg-white shadow-sm">
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-20">
                     <img src={LOGO_URL} alt="WellMatch Logo" className="h-12" />
-                    {user && ( 
-                        <button 
-                            onClick={handleLogout}
-                            className="text-sm font-medium text-gray-500 hover:text-red-600"
-                        >
-                            התנתק
-                        </button>
-                    )}
+                    {user && <button onClick={handleLogout} className="text-sm font-medium text-gray-500 hover:text-red-600">התנתק</button>}
                 </div>
             </header>
-            
-            <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                {renderContent()}
-            </main>
+            <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">{renderContent()}</main>
         </div>
     );
 };
