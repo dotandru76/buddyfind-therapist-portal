@@ -1,4 +1,4 @@
-// src/components/ProfessionManager.jsx - FINAL V5.0 (Full CMS: Professions, Specialties, Symptoms)
+// src/components/ProfessionManager.jsx - FIXED (Missing function added)
 import React, { useState, useEffect, useCallback } from 'react';
 import LoadingSpinner from './LoadingSpinner';
 import AlertMessage from './AlertMessage';
@@ -33,13 +33,13 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
         try {
             const res = await fetch(`${API_URL}/api/admin/data/all-definitions`, { credentials: 'include' });
             if (res.status === 401 || res.status === 403) { onLogout(); return; }
-            if (!res.ok) throw new Error('שגיאה בטעינת הנתונים');
+            if (!res.ok) throw new Error('שגיאה בטעינת הנתונים (ייתכן והשרת טרם עודכן)');
             const result = await res.json();
             setData(result);
             
             // הגדרת ברירת מחדל לבחירה ראשונית
             const targetList = activeTab === 'professions' ? result.mainCategories : result.professions;
-            if (targetList.length > 0) setSelectedParentId(targetList[0].id);
+            if (targetList && targetList.length > 0) setSelectedParentId(targetList[0].id);
 
         } catch (err) { setError(err.message); } 
         finally { setLoading(false); }
@@ -76,7 +76,7 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
             
             setMessage('נוצר בהצלחה!');
             setNewItemName('');
-            fetchData(); // רענן הכל כדי שהרשימות יהיו מסונכרנות
+            fetchData(); 
         } catch (err) { setError(err.message); } 
         finally { setSaving(false); }
     };
@@ -97,12 +97,23 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
 
     // --- 4. עזרי תצוגה ---
     const getParentName = (item) => {
-        if (activeTab === 'professions') return item.main_category_name;
+        if (activeTab === 'professions') return item.main_category_name || '-';
         const prof = data.professions.find(p => p.id === item.profession_id);
         return prof ? prof.name : '-';
     };
 
-    const list = getFilteredList(); // השתמש ב-useMemo אם הרשימה גדולה
+    // --- !!! הפונקציה החסרה שגרמה לקריסה !!! ---
+    const getFilteredList = () => {
+        switch (activeTab) {
+            case 'professions': return data.professions || [];
+            case 'specialties': return data.specialties || [];
+            case 'symptoms': return data.symptoms || [];
+            default: return [];
+        }
+    };
+    // --- !!! סוף התיקון !!! ---
+
+    const list = getFilteredList(); 
 
     return (
         <div className="space-y-6">
@@ -140,8 +151,8 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
                         >
                             <option value="" disabled>-- בחר שיוך --</option>
                             {activeTab === 'professions' 
-                                ? data.mainCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)
-                                : data.professions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)
+                                ? (data.mainCategories || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)
+                                : (data.professions || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)
                             }
                         </select>
                     </div>
