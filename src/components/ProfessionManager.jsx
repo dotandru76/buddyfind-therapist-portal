@@ -24,11 +24,10 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
     const [error, setError] = useState(null);
     const [message, setMessage] = useState(null);
     
-    // טפסי הוספה
     const [newItemName, setNewItemName] = useState('');
-    const [selectedParentId, setSelectedParentId] = useState(''); // קטגוריה (למקצוע) או מקצוע (להתמחות/סימפטום)
+    const [selectedParentId, setSelectedParentId] = useState(''); 
+    const [saving, setSaving] = useState(false);
 
-    // --- 1. טעינת כל הנתונים ---
     const fetchData = useCallback(async () => {
         setLoading(true); setError(null);
         try {
@@ -38,17 +37,16 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
             const result = await res.json();
             setData(result);
             
-            // ברירת מחדל ל-Select
             if (activeTab === 'professions' && result.mainCategories.length > 0) setSelectedParentId(result.mainCategories[0].id);
             if ((activeTab === 'specialties' || activeTab === 'symptoms') && result.professions.length > 0) setSelectedParentId(result.professions[0].id);
 
         } catch (err) { setError(err.message); } 
         finally { setLoading(false); }
-    }, [API_URL, onLogout, activeTab]); // תלות ב-activeTab כדי לאפס את ה-Select
+    }, [API_URL, onLogout, activeTab]); 
 
     useEffect(() => { fetchData(); }, [fetchData]);
 
-    // --- 2. יצירת פריט חדש ---
+    // --- יצירת פריט חדש ---
     const handleCreate = async (e) => {
         e.preventDefault();
         if (!newItemName.trim() || !selectedParentId) return;
@@ -65,7 +63,7 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
             body = { name: newItemName, profession_id: selectedParentId };
         }
 
-        setLoading(true);
+        setSaving(true); setError(null); setMessage(null);
         try {
             const res = await fetch(`${API_URL}${endpoint}`, {
                 method: 'POST',
@@ -76,15 +74,20 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
             if (!res.ok) throw new Error('שגיאה ביצירה');
             setMessage('נוצר בהצלחה!');
             setNewItemName('');
-            fetchData(); // רענן הכל
-        } catch (err) { setError(err.message); setLoading(false); }
+            fetchData();
+        } catch (err) { setError(err.message); } 
+        finally { setSaving(false); }
     };
 
-    // --- 3. מחיקת פריט ---
+    // --- מחיקת פריט ---
     const handleDelete = async (id, type) => {
-        if (!window.confirm('האם אתה בטוח? המחיקה היא סופית.')) return;
-        const endpoint = type === 'specialty' ? `/api/admin/specialties/${id}` : `/api/admin/symptoms/${id}`;
+        if (!window.confirm('האם אתה בטוח? המחיקה היא סופית. (המיפויים יימחקו)')) return;
         
+        const endpoint = type === 'specialties' ? `/api/admin/specialties/${id}` : 
+                         type === 'symptoms' ? `/api/admin/symptoms/${id}` : null;
+                         
+        if (!endpoint) return;
+
         try {
             const res = await fetch(`${API_URL}${endpoint}`, { method: 'DELETE', credentials: 'include' });
             if (!res.ok) throw new Error('שגיאה במחיקה');
@@ -95,7 +98,6 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
     // --- סינון להצגה בטבלה ---
     const getFilteredList = () => {
         if (activeTab === 'professions') return data.professions;
-        // עבור התמחויות וסימפטומים, נציג את כולם אבל נמיין לפי מקצוע
         if (activeTab === 'specialties') return data.specialties;
         if (activeTab === 'symptoms') return data.symptoms;
         return [];
@@ -103,7 +105,6 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
     
     const getParentName = (item) => {
         if (activeTab === 'professions') return item.main_category_name;
-        // עבור התמחויות וסימפטומים, ההורה הוא המקצוע
         const prof = data.professions.find(p => p.id === item.profession_id);
         return prof ? prof.name : '-';
     };
@@ -130,8 +131,8 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
             <form onSubmit={handleCreate} className="bg-white p-6 rounded-b-lg shadow space-y-4 border-t-0">
                 <h4 className="text-lg font-semibold text-gray-700">
                     {activeTab === 'professions' ? 'הוספת מקצוע חדש' : 
-                     activeTab === 'specialties' ? 'הוספת התמחות למקצוע' : 
-                     'הוספת סימפטום למקצוע'}
+                     activeTab === 'specialties' ? 'הוספת התמחות' : 
+                     'הוספת סימפטום'}
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {/* שדה בחירה (הורה) */}
@@ -144,6 +145,7 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
                             onChange={(e) => setSelectedParentId(e.target.value)} 
                             className="block w-full px-3 py-2 border border-gray-300 rounded-md bg-white"
                         >
+                            <option value="" disabled>-- בחר שיוך --</option>
                             {activeTab === 'professions' 
                                 ? data.mainCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)
                                 : data.professions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)
@@ -153,10 +155,7 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
 
                     {/* שדה שם */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                             {activeTab === 'professions' ? 'שם המקצוע' : 
-                              activeTab === 'specialties' ? 'שם ההתמחות' : 'שם הסימפטום'}
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">שם הפריט</label>
                         <input
                             type="text"
                             value={newItemName}
@@ -167,8 +166,8 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
                     </div>
 
                     <div className="self-end">
-                        <button type="submit" disabled={loading} className="w-full py-2 px-4 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition disabled:opacity-50">
-                            {loading ? 'טוען...' : '+ הוסף'}
+                        <button type="submit" disabled={loading || saving} className="w-full py-2 px-4 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition disabled:opacity-50">
+                            {saving ? 'שומר...' : '+ הוסף'}
                         </button>
                     </div>
                 </div>
@@ -176,39 +175,44 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
 
             {/* --- טבלה --- */}
             <div className="bg-white p-6 rounded-lg shadow">
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200 text-sm">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-4 py-2 text-right font-semibold text-gray-600">ID</th>
-                                <th className="px-4 py-2 text-right font-semibold text-gray-600">שם</th>
-                                <th className="px-4 py-2 text-right font-semibold text-gray-600">משויך ל-</th>
-                                <th className="px-4 py-2 text-right font-semibold text-gray-600 w-24">פעולות</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {list.map(item => (
-                                <tr key={item.id} className="hover:bg-gray-50">
-                                    <td className="px-4 py-3 font-mono text-gray-400">#{item.id}</td>
-                                    <td className="px-4 py-3 font-medium text-gray-900">{item.name}</td>
-                                    <td className="px-4 py-3 text-gray-600">{getParentName(item)}</td>
-                                    <td className="px-4 py-3">
-                                        {/* מחיקה אפשרית רק להתמחויות וסימפטומים כרגע */}
-                                        {activeTab !== 'professions' && (
-                                            <button 
-                                                onClick={() => handleDelete(item.id, activeTab === 'specialties' ? 'specialty' : 'symptom')}
-                                                className="text-red-500 hover:text-red-700 text-xs font-bold bg-red-50 px-2 py-1 rounded"
-                                            >
-                                                מחק
-                                            </button>
-                                        )}
-                                        {activeTab === 'professions' && <span className="text-gray-400 text-xs">נעול</span>}
-                                    </td>
+                <h4 className="text-lg font-semibold mb-4">פריטים קיימים ({list.length})</h4>
+                {loading && list.length === 0 && <LoadingSpinner />}
+                
+                {!loading && list.length > 0 && (
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-4 py-3 text-right font-semibold text-gray-600">ID</th>
+                                    <th className="px-4 py-3 text-right font-semibold text-gray-600">שם</th>
+                                    <th className="px-4 py-3 text-right font-semibold text-gray-600">משויך ל-</th>
+                                    <th className="px-4 py-3 text-right font-semibold text-gray-600 w-24">פעולות</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {list.map(item => (
+                                    <tr key={item.id} className="hover:bg-gray-50">
+                                        <td className="px-4 py-3 font-mono text-gray-400">#{item.id}</td>
+                                        <td className="px-4 py-3 font-medium text-gray-900">{item.name}</td>
+                                        <td className="px-4 py-3 text-gray-600">{getParentName(item)}</td>
+                                        <td className="px-4 py-3">
+                                            {/* מחיקה אפשרית רק להתמחויות וסימפטומים כרגע */}
+                                            {activeTab !== 'professions' && (
+                                                <button 
+                                                    onClick={() => handleDelete(item.id, activeTab)}
+                                                    className="text-red-500 hover:text-red-700 text-xs font-bold bg-red-50 px-2 py-1 rounded"
+                                                >
+                                                    מחק
+                                                </button>
+                                            )}
+                                            {activeTab === 'professions' && <span className="text-gray-400 text-xs">נעול</span>}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </div>
         </div>
     );
