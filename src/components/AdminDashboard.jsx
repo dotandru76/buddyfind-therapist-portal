@@ -387,6 +387,10 @@ const AdminDashboard = ({ API_URL, user, onLogout }) => {
             )}
         </div>
     );
+    // ... קוד קיים ...
+        {/* הוסף את זה בסוף, לפני סגירת ה-div הראשי */}
+        <AdminDebugTool API_URL={API_URL} />
+    </div>
 };
 
 export default AdminDashboard;
