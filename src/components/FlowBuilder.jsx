@@ -7,8 +7,8 @@ import ReactFlow, {
   applyEdgeChanges,
   addEdge,
   MarkerType,
-  useReactFlow, // <-- חיוני וקיים
-  ReactFlowProvider, // <-- חיוני וקיים
+  useReactFlow, // <-- חיוני
+  ReactFlowProvider, // <-- חיוני
 } from 'reactflow';
 import 'reactflow/dist/style.css'; 
 
@@ -17,9 +17,9 @@ import QuestionNode from './QuestionNode.jsx';
 
 const nodeTypes = { questionNode: QuestionNode };
 const defaultViewport = { x: 0, y: 0, zoom: 0.6 }; 
-const flowStyles = { height: '750px', border: '1px solid #e2e8f0', borderRadius: '12px', background: '#f8fafc' };
+const flowStyles = { height: '750px', border: '1px solid #ddd', borderRadius: '8px', background: '#f8fafc' };
 
-// --- פונקציית המרה (Legacy Fallback) ---
+// --- פונקציית המרה (Fallback) ---
 const convertTreeToFlow = (tree, initialData) => {
   const nodes = [];
   const edges = [];
@@ -80,7 +80,7 @@ const convertTreeToFlow = (tree, initialData) => {
     });
   }
 
-  // --- חיבורים ---
+  // --- חיבורים (כמו שהוגדרו) ---
   addEdgeClean('start', 'targetEntity', 2, 'נפש'); 
   initialData.mainCategories.forEach(c => { if (c.id !== 2) addEdgeClean('start', 'audience', c.id, c.name); });
   addEdgeClean('targetEntity', 'audience', 'individual');
@@ -209,7 +209,6 @@ const NodeInspector = ({ node, setNodes, setEdges }) => {
     </div>
   );
 };
-
 
 // --- FlowBuilderWrapper ---
 const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
