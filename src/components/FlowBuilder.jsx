@@ -17,9 +17,9 @@ import QuestionNode from './QuestionNode.jsx';
 
 const nodeTypes = { questionNode: QuestionNode };
 const defaultViewport = { x: 0, y: 0, zoom: 0.6 }; 
-const flowStyles = { height: '750px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#f8fafc' };
+const flowStyles = { height: '750px', border: '1px solid #ddd', borderRadius: '8px', background: '#f8fafc' };
 
-// ... (convertTreeToFlow function logic - נשאר זהה) ...
+// --- פונקציית המרה (Legacy Fallback) ---
 const convertTreeToFlow = (tree, initialData) => {
   const nodes = [];
   const edges = [];
@@ -80,7 +80,7 @@ const convertTreeToFlow = (tree, initialData) => {
     });
   }
 
-  // --- חיבורים (למען תאימות) ---
+  // --- חיבורים (שחזור) ---
   addEdgeClean('start', 'targetEntity', 2, 'נפש'); 
   initialData.mainCategories.forEach(c => { if (c.id !== 2) addEdgeClean('start', 'audience', c.id, c.name); });
   addEdgeClean('targetEntity', 'audience', 'individual');
@@ -111,7 +111,6 @@ const convertTreeToFlow = (tree, initialData) => {
 
 // --- רכיב חלון העריכה (Inspector) ---
 const NodeInspector = ({ node, setNodes, setEdges }) => {
-    // ... (קוד חלון העריכה נשאר זהה) ...
   const [label, setLabel] = useState(node.data.label);
   const [questionType, setQuestionType] = useState(node.data.questionType || 'single');
   const [minVal, setMinVal] = useState(node.data.minVal || 0);
@@ -134,7 +133,7 @@ const NodeInspector = ({ node, setNodes, setEdges }) => {
     const oldId = outputs[index].id; 
     const newOutputs = outputs.map((out, i) => i === index ? { ...out, label: newLabel } : out);
     setOutputs(newOutputs);
-    setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, outputs: newOutputs } } : n));
+    updateNodeData('outputs', newOutputs);
     setEdges(eds => eds.map(e => {
         if (e.source === node.id && e.sourceHandle === String(oldId)) {
             return { ...e, label: newLabel }; 
@@ -210,7 +209,6 @@ const NodeInspector = ({ node, setNodes, setEdges }) => {
     </div>
   );
 };
-
 
 // --- FlowBuilderWrapper ---
 const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
