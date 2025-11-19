@@ -7,6 +7,7 @@ import ReactFlow, {
   Controls,
   Background,
   NodeResizer,
+  useReactFlow,
   getRectOfNodes,
   getTransformForBounds
 } from 'reactflow';
