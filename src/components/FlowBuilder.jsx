@@ -17,13 +17,23 @@ import QuestionNode from './QuestionNode.jsx';
 
 const nodeTypes = { questionNode: QuestionNode };
 const defaultViewport = { x: 0, y: 0, zoom: 0.6 }; 
-const flowStyles = { height: '750px', border: '1px solid #ddd', borderRadius: '8px', background: '#f8fafc' };
+const flowStyles = { height: '750px', border: '1px solid #e2e8f0', borderRadius: '12px', background: '#f8fafc' };
 
 // --- פונקציית המרה (Legacy Fallback) ---
 const convertTreeToFlow = (tree, initialData) => {
   const nodes = [];
   const edges = [];
   
+  const positions = {
+    start: { x: 50, y: 300 },
+    targetEntity: { x: 500, y: 50 },
+    audience: { x: 500, y: 450 },
+    profession: { x: 900, y: 300 },
+    symptoms: { x: 1400, y: 0 }, 
+    preferences: { x: 1900, y: 0 },
+    region: { x: 2300, y: 0 },
+  };
+
   const addEdgeClean = (source, target, sourceHandle = null, label = '') => {
     edges.push({
       id: `e_${source}-${target}_${sourceHandle || 'def'}`,
@@ -81,8 +91,7 @@ const convertTreeToFlow = (tree, initialData) => {
   
   const preferencesNodeId = 'preferences';
   const regionNodeId = 'region';
-  
-  // (שחזור חיבורי הפיצול למען שלמות הקוד)
+
   initialData.professions.forEach((prof) => {
       const profSymptoms = initialData.symptoms.filter(s => s.profession_id === prof.id).map(s => ({ id: s.search_key, label: s.name }));
       if (profSymptoms.length > 0) {
@@ -102,100 +111,105 @@ const convertTreeToFlow = (tree, initialData) => {
 
 // --- רכיב חלון העריכה (Inspector) ---
 const NodeInspector = ({ node, setNodes, setEdges }) => {
-    // ... (אותו קוד NodeInspector מהתשובה הקודמת, ללא שינוי, מכיל את כל הפונקציות) ...
-    const [label, setLabel] = useState(node.data.label);
-    const [questionType, setQuestionType] = useState(node.data.questionType || 'single');
-    const [minVal, setMinVal] = useState(node.data.minVal || 0);
-    const [maxVal, setMaxVal] = useState(node.data.maxVal || 100);
-    const [outputs, setOutputs] = useState(node.data.outputs || []);
-  
-    useEffect(() => {
-      setLabel(node.data.label);
-      setQuestionType(node.data.questionType || 'single');
-      setMinVal(node.data.minVal || 0);
-      setMaxVal(node.data.maxVal || 100);
-      setOutputs(node.data.outputs || []);
-    }, [node]); 
-  
-    const updateNodeData = (key, value) => {
-      setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, [key]: value } } : n));
-    };
-  
-    const updateOutputLabel = (index, newLabel) => {
-      const oldId = outputs[index].id; 
-      const newOutputs = outputs.map((out, i) => i === index ? { ...out, label: newLabel } : out);
-      setOutputs(newOutputs);
-      updateNodeData('outputs', newOutputs);
-      setEdges(eds => eds.map(e => {
-          if (e.source === node.id && e.sourceHandle === String(oldId)) {
-              return { ...e, label: newLabel }; 
-          }
-          return e;
-      }));
-    };
-    
-    const addOutput = () => {
-      const newId = `opt_${Date.now()}`;
-      const newOutputs = [...outputs, { id: newId, label: 'אופציה חדשה' }];
-      setOutputs(newOutputs);
-      updateNodeData('outputs', newOutputs);
-    };
-    
-    const deleteOutput = (index) => {
-      const outputToRemove = outputs[index];
-      const newOutputs = outputs.filter((_, i) => i !== index);
-      setOutputs(newOutputs);
-      updateNodeData('outputs', newOutputs);
-      setEdges(eds => eds.filter(e => !(e.source === node.id && e.sourceHandle === String(outputToRemove.id))));
-    };
+  const [label, setLabel] = useState(node.data.label);
+  const [questionType, setQuestionType] = useState(node.data.questionType || 'single');
+  const [minVal, setMinVal] = useState(node.data.minVal || 0);
+  const [maxVal, setMaxVal] = useState(node.data.maxVal || 100);
+  const [outputs, setOutputs] = useState(node.data.outputs || []);
 
-    return (
-        <div style={{ width: '320px', background: 'white', borderRight: '1px solid #e5e7eb', padding: '24px', direction: 'rtl', textAlign: 'right', overflowY: 'auto', boxShadow: '-4px 0 15px rgba(0,0,0,0.05)', zIndex: 10 }}>
-          <h4 style={{ fontWeight: '800', fontSize: '18px', color: '#1e293b', marginBottom: '20px', borderBottom: '2px solid #f1f5f9', paddingBottom: '10px' }}>הגדרות שאלה</h4>
-          
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>נוסח השאלה</label>
-            <textarea value={label} onChange={(e) => { setLabel(e.target.value); updateNodeData('label', e.target.value); }} rows={2} style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '10px', fontSize: '14px', resize: 'none', outline: 'none' }} />
-          </div>
+  useEffect(() => {
+    setLabel(node.data.label);
+    setQuestionType(node.data.questionType || 'single');
+    setMinVal(node.data.minVal || 0);
+    setMaxVal(node.data.maxVal || 100);
+    setOutputs(node.data.outputs || []);
+  }, [node]); 
 
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>סוג השאלה</label>
-            <select value={questionType} onChange={(e) => { setQuestionType(e.target.value); updateNodeData('questionType', e.target.value); }} style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '8px', fontSize: '14px', background: 'white' }}>
-                <option value="single">בחירה יחידה (Single Choice)</option>
-                <option value="multiple">בחירה מרובה (Multiple Choice)</option>
-                <option value="slider">סליידר / טווח (Slider)</option>
-            </select>
-          </div>
+  const updateNodeData = (key, value) => {
+    setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, [key]: value } } : n));
+  };
 
-          {questionType === 'slider' && (
-              <div style={{ marginBottom: '20px', padding: '10px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#166534', marginBottom: '10px' }}>טווח ערכים</label>
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                      <div><span style={{ fontSize: '11px' }}>מינימום</span><input type="number" value={minVal} onChange={(e) => { setMinVal(e.target.value); updateNodeData('minVal', e.target.value); }} style={{ width: '100%', padding: '5px', borderRadius: '4px', border: '1px solid #ddd' }} /></div>
-                      <div><span style={{ fontSize: '11px' }}>מקסימום</span><input type="number" value={maxVal} onChange={(e) => { setMaxVal(e.target.value); updateNodeData('maxVal', e.target.value); }} style={{ width: '100%', padding: '5px', borderRadius: '4px', border: '1px solid #ddd' }} /></div>
-                  </div>
+  const updateOutputLabel = (index, newLabel) => {
+    const oldId = outputs[index].id; 
+    const newOutputs = outputs.map((out, i) => i === index ? { ...out, label: newLabel } : out);
+    setOutputs(newOutputs);
+    setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, outputs: newOutputs } } : n));
+    setEdges(eds => eds.map(e => {
+        if (e.source === node.id && e.sourceHandle === String(oldId)) {
+            return { ...e, label: newLabel }; 
+        }
+        return e;
+    }));
+  };
+  
+  const addOutput = () => {
+    const newId = `opt_${Date.now()}`;
+    const newOutput = { id: newId, label: 'אופציה חדשה' };
+    const newOutputs = [...outputs, newOutput];
+    setOutputs(newOutputs);
+    updateNodeData('outputs', newOutputs);
+  };
+  
+  const deleteOutput = (index) => {
+    const outputToRemove = outputs[index];
+    const newOutputs = outputs.filter((_, i) => i !== index);
+    setOutputs(newOutputs);
+    updateNodeData('outputs', newOutputs);
+    setEdges(eds => eds.filter(e => !(e.source === node.id && e.sourceHandle === String(outputToRemove.id))));
+  };
+
+  return (
+    <div style={{ width: '320px', background: 'white', borderRight: '1px solid #e5e7eb', padding: '24px', direction: 'rtl', textAlign: 'right', overflowY: 'auto', boxShadow: '-4px 0 15px rgba(0,0,0,0.05)', zIndex: 10 }}>
+      <h4 style={{ fontWeight: '800', fontSize: '18px', color: '#1e293b', marginBottom: '20px', borderBottom: '2px solid #f1f5f9', paddingBottom: '10px' }}>הגדרות שאלה</h4>
+      
+      <div style={{ marginBottom: '20px' }}>
+        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>נוסח השאלה</label>
+        <textarea value={label} onChange={(e) => { setLabel(e.target.value); updateNodeData('label', e.target.value); }} rows={2} style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '10px', fontSize: '14px', resize: 'none', outline: 'none' }} />
+      </div>
+
+      <div style={{ marginBottom: '20px' }}>
+        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>סוג השאלה</label>
+        <select value={questionType} onChange={(e) => { setQuestionType(e.target.value); updateNodeData('questionType', e.target.value); }} style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '8px', fontSize: '14px', background: 'white' }}>
+            <option value="single">בחירה יחידה (Single Choice)</option>
+            <option value="multiple">בחירה מרובה (Multiple Choice)</option>
+            <option value="slider">סליידר / טווח (Slider)</option>
+        </select>
+      </div>
+
+      {questionType === 'slider' && (
+          <div style={{ marginBottom: '20px', padding: '10px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#166534', marginBottom: '10px' }}>טווח ערכים</label>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                  <div><span style={{ fontSize: '11px' }}>מינימום</span><input type="number" value={minVal} onChange={(e) => { setMinVal(e.target.value); updateNodeData('minVal', e.target.value); }} style={{ width: '100%', padding: '5px', borderRadius: '4px', border: '1px solid #ddd' }} /></div>
+                  <div><span style={{ fontSize: '11px' }}>מקסימום</span><input type="number" value={maxVal} onChange={(e) => { setMaxVal(e.target.value); updateNodeData('maxVal', e.target.value); }} style={{ width: '100%', padding: '5px', borderRadius: '4px', border: '1px solid #ddd' }} /></div>
               </div>
-          )}
-
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '10px' }}>
-                {questionType === 'slider' ? 'יציאה (לשלב הבא)' : 'תשובות / יציאות'}
-            </label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {outputs.map((output, index) => (
-                <div key={output.id || index} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <div style={{ background: '#f1f5f9', padding: '6px', borderRadius: '6px', flexGrow: 1 }}>
-                      <input type="text" value={output.label} onChange={(e) => updateOutputLabel(index, e.target.value)} style={{ width: '100%', border: 'none', background: 'transparent', fontSize: '13px', outline: 'none' }} />
-                  </div>
-                  {questionType !== 'slider' && (<button onClick={() => deleteOutput(index)} style={{ background: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '6px', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>✕</button>)}
-                </div>
-              ))}
-            </div>
-            {questionType !== 'slider' && (<button onClick={addOutput} style={{ width: '100%', marginTop: '15px', padding: '10px', background: '#eff6ff', color: '#3b82f6', border: '1px dashed #3b82f6', borderRadius: '8px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>+ הוסף תשובה</button>)}
           </div>
+      )}
+
+      <div>
+        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '10px' }}>
+            {questionType === 'slider' ? 'יציאה (לשלב הבא)' : 'תשובות / יציאות'}
+        </label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {outputs.map((output, index) => (
+            <div key={output.id || index} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <div style={{ background: '#f1f5f9', padding: '6px', borderRadius: '6px', flexGrow: 1 }}>
+                  <input type="text" value={output.label} onChange={(e) => updateOutputLabel(index, e.target.value)} style={{ width: '100%', border: 'none', background: 'transparent', fontSize: '13px', outline: 'none' }} />
+              </div>
+              {questionType !== 'slider' && (
+                  <button onClick={() => deleteOutput(index)} style={{ background: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '6px', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>✕</button>
+              )}
+            </div>
+          ))}
         </div>
-      );
-    };
+        {questionType !== 'slider' && (
+            <button onClick={addOutput} style={{ width: '100%', marginTop: '15px', padding: '10px', background: '#eff6ff', color: '#3b82f6', border: '1px dashed #3b82f6', borderRadius: '8px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>+ הוסף תשובה</button>
+        )}
+      </div>
+    </div>
+  );
+};
+
 
 // --- FlowBuilderWrapper ---
 const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
@@ -251,8 +265,8 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
   }, [initialData]); 
 
   const onNodeClick = (event, node) => setSelectedNode(node);
-  const onNodesChange = useCallback((changes) => setNodes((nds) => applyNodeChanges(changes, nds)), []);
-  const onEdgesChange = useCallback((changes) => setEdges((eds) => applyEdgeChanges(changes, eds)), []);
+  const onNodesChange = useCallback((changes) => setNodes((nds) => applyNodeChanges(changes, nds)), [setNodes]);
+  const onEdgesChange = useCallback((changes) => setEdges((eds) => applyEdgeChanges(changes, eds)), [setEdges]);
   
   const onNodesDelete = useCallback((deleted) => {
       setEdges((eds) => deleted.reduce((acc, node) => acc.filter((edge) => edge.source !== node.id && edge.target !== node.id), eds));
