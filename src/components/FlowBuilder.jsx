@@ -7,8 +7,8 @@ import ReactFlow, {
   applyEdgeChanges,
   addEdge,
   MarkerType,
-  useReactFlow, // <-- חיוני
-  ReactFlowProvider, // <-- חיוני
+  useReactFlow, // <-- חיוני וקיים
+  ReactFlowProvider, // <-- חיוני וקיים
 } from 'reactflow';
 import 'reactflow/dist/style.css'; 
 
@@ -80,7 +80,7 @@ const convertTreeToFlow = (tree, initialData) => {
     });
   }
 
-  // --- חיבורים (כמו שהוגדרו) ---
+  // --- חיבורים ---
   addEdgeClean('start', 'targetEntity', 2, 'נפש'); 
   initialData.mainCategories.forEach(c => { if (c.id !== 2) addEdgeClean('start', 'audience', c.id, c.name); });
   addEdgeClean('targetEntity', 'audience', 'individual');
@@ -133,7 +133,7 @@ const NodeInspector = ({ node, setNodes, setEdges }) => {
     const oldId = outputs[index].id; 
     const newOutputs = outputs.map((out, i) => i === index ? { ...out, label: newLabel } : out);
     setOutputs(newOutputs);
-    setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, outputs: newOutputs } } : n));
+    updateNodeData('outputs', newOutputs);
     setEdges(eds => eds.map(e => {
         if (e.source === node.id && e.sourceHandle === String(oldId)) {
             return { ...e, label: newLabel }; 
