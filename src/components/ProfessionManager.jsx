@@ -1,4 +1,4 @@
-// src/components/ProfessionManager.jsx - v4 (Full CMS: Professions, Specialties, Symptoms)
+// src/components/ProfessionManager.jsx - FINAL V5.0 (Full CMS: Professions, Specialties, Symptoms)
 import React, { useState, useEffect, useCallback } from 'react';
 import LoadingSpinner from './LoadingSpinner';
 import AlertMessage from './AlertMessage';
@@ -18,16 +18,16 @@ const TabButton = ({ text, isActive, onClick }) => (
 
 const ProfessionManager = ({ API_URL, onLogout }) => {
     const [activeTab, setActiveTab] = useState('professions'); // professions, specialties, symptoms
-    
     const [data, setData] = useState({ professions: [], specialties: [], symptoms: [], mainCategories: [] });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [message, setMessage] = useState(null);
     
     const [newItemName, setNewItemName] = useState('');
-    const [selectedParentId, setSelectedParentId] = useState(''); 
+    const [selectedParentId, setSelectedParentId] = useState('');
     const [saving, setSaving] = useState(false);
 
+    // --- 1. טעינת כל הנתונים ---
     const fetchData = useCallback(async () => {
         setLoading(true); setError(null);
         try {
@@ -37,8 +37,9 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
             const result = await res.json();
             setData(result);
             
-            if (activeTab === 'professions' && result.mainCategories.length > 0) setSelectedParentId(result.mainCategories[0].id);
-            if ((activeTab === 'specialties' || activeTab === 'symptoms') && result.professions.length > 0) setSelectedParentId(result.professions[0].id);
+            // הגדרת ברירת מחדל לבחירה ראשונית
+            const targetList = activeTab === 'professions' ? result.mainCategories : result.professions;
+            if (targetList.length > 0) setSelectedParentId(targetList[0].id);
 
         } catch (err) { setError(err.message); } 
         finally { setLoading(false); }
@@ -46,7 +47,7 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
 
     useEffect(() => { fetchData(); }, [fetchData]);
 
-    // --- יצירת פריט חדש ---
+    // --- 2. יצירת פריט חדש ---
     const handleCreate = async (e) => {
         e.preventDefault();
         if (!newItemName.trim() || !selectedParentId) return;
@@ -72,22 +73,21 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
                 body: JSON.stringify(body)
             });
             if (!res.ok) throw new Error('שגיאה ביצירה');
+            
             setMessage('נוצר בהצלחה!');
             setNewItemName('');
-            fetchData();
+            fetchData(); // רענן הכל כדי שהרשימות יהיו מסונכרנות
         } catch (err) { setError(err.message); } 
         finally { setSaving(false); }
     };
 
-    // --- מחיקת פריט ---
+    // --- 3. מחיקת פריט ---
     const handleDelete = async (id, type) => {
-        if (!window.confirm('האם אתה בטוח? המחיקה היא סופית. (המיפויים יימחקו)')) return;
+        if (!window.confirm('האם אתה בטוח? פעולה זו תמחק גם מיפויים קיימים.')) return;
         
         const endpoint = type === 'specialties' ? `/api/admin/specialties/${id}` : 
                          type === 'symptoms' ? `/api/admin/symptoms/${id}` : null;
                          
-        if (!endpoint) return;
-
         try {
             const res = await fetch(`${API_URL}${endpoint}`, { method: 'DELETE', credentials: 'include' });
             if (!res.ok) throw new Error('שגיאה במחיקה');
@@ -95,21 +95,14 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
         } catch (err) { alert(err.message); }
     };
 
-    // --- סינון להצגה בטבלה ---
-    const getFilteredList = () => {
-        if (activeTab === 'professions') return data.professions;
-        if (activeTab === 'specialties') return data.specialties;
-        if (activeTab === 'symptoms') return data.symptoms;
-        return [];
-    };
-    
+    // --- 4. עזרי תצוגה ---
     const getParentName = (item) => {
         if (activeTab === 'professions') return item.main_category_name;
         const prof = data.professions.find(p => p.id === item.profession_id);
         return prof ? prof.name : '-';
     };
 
-    const list = getFilteredList();
+    const list = getFilteredList(); // השתמש ב-useMemo אם הרשימה גדולה
 
     return (
         <div className="space-y-6">
@@ -196,7 +189,6 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
                                         <td className="px-4 py-3 font-medium text-gray-900">{item.name}</td>
                                         <td className="px-4 py-3 text-gray-600">{getParentName(item)}</td>
                                         <td className="px-4 py-3">
-                                            {/* מחיקה אפשרית רק להתמחויות וסימפטומים כרגע */}
                                             {activeTab !== 'professions' && (
                                                 <button 
                                                     onClick={() => handleDelete(item.id, activeTab)}
