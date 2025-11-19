@@ -1,8 +1,9 @@
 /* src/style.css - Tailwind Base Directives and Custom Mappings */
+@import 'reactflow/dist/style.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-@import 'reactflow/dist/style.css';
+
 /* Custom Color Variables - Crucial for consistent styling */
 :root {
   --primary-blue: #667eea;
