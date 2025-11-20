@@ -1,4 +1,4 @@
-// src/components/SymptomMapper.jsx - V9.1 (Trash Can & Keyboard Delete)
+// src/components/SymptomMapper.jsx - V10.0 (Draggable Boxes & Fixed Trash)
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactFlow, {
   ReactFlowProvider,
@@ -6,14 +6,14 @@ import ReactFlow, {
   useEdgesState,
   Controls,
   Background,
-  Panel,
+  Panel, // רכיב פאנל למיקום קבוע
   useReactFlow
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import LoadingSpinner from './LoadingSpinner';
 import ContextMenu from './ContextMenu';
 
-// מידות
+// מידות ברירת מחדל
 const BOX_WIDTH = 280;
 const BOX_HEIGHT = 280;
 
@@ -27,10 +27,11 @@ const SpecialtyBoxNode = ({ data }) => {
             backgroundColor: isHighlighted ? '#eff6ff' : (data.color || '#f8fafc'), 
             border: isHighlighted ? '3px dashed #2563EB' : '1px solid #cbd5e1', 
             borderRadius: '16px', 
-            boxShadow: isHighlighted ? '0 0 15px rgba(37, 99, 235, 0.2)' : '0 4px 6px -1px rgba(0,0,0,0.05)',
+            boxShadow: isHighlighted ? '0 0 15px rgba(37, 99, 235, 0.2)' : '0 4px 10px rgba(0,0,0,0.08)',
             display: 'flex', flexDirection: 'column',
             transition: 'all 0.2s ease',
-            zIndex: -1
+            zIndex: -1,
+            cursor: 'grab' // סמן יד לגרירה
         }}>
             <div style={{ 
                 background: isHighlighted ? '#2563EB' : 'rgba(255,255,255,0.8)', 
@@ -53,7 +54,7 @@ const SpecialtyBoxNode = ({ data }) => {
 const SymptomPillNode = ({ data, selected }) => (
   <div style={{ 
       background: 'white', 
-      border: selected ? '2px solid #ef4444' : '1px solid #64748b', // סימון אדום כשנבחר למחיקה
+      border: selected ? '2px solid #ef4444' : '1px solid #64748b', 
       borderRadius: '99px', 
       padding: '6px 14px', fontSize: '12px', fontWeight: '600', color: '#334155',
       boxShadow: '0 4px 6px rgba(0,0,0,0.1)', cursor: 'grab', width: 'max-content',
@@ -82,7 +83,7 @@ const Sidebar = ({ symptoms }) => {
             <h4 style={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '5px' }}>בנק סימפטומים</h4>
             <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '10px', lineHeight: '1.4' }}>
                 גרור סימפטום למשטח.<br/>
-                כדי למחוק: גרור לפח או לחץ Delete.
+                כדי למחוק: גרור לפח או סמן ולחץ Delete.
             </div>
             {symptoms.map((sym) => (
                 <div 
@@ -110,7 +111,7 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
     const [allSymptoms, setAllSymptoms] = useState([]); 
     const [loading, setLoading] = useState(true);
     const [contextMenu, setContextMenu] = useState(null);
-    const [trashHighlighted, setTrashHighlighted] = useState(false); // האם הפח פעיל?
+    const [trashHighlighted, setTrashHighlighted] = useState(false);
     
     const reactFlowWrapper = useRef(null);
     const { project } = useReactFlow(); 
@@ -135,7 +136,7 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
 
                 const initialNodes = [];
                 
-                // קופסאות
+                // 1. יצירת קופסאות (התמחויות) - עכשיו Draggable!
                 (defs.specialties || []).forEach((spec, index) => {
                     initialNodes.push({
                         id: `spec-${spec.id}`,
@@ -143,12 +144,13 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
                         data: { label: spec.name, color: colors[index % colors.length], id: spec.id, isHighlighted: false },
                         position: { x: (index % 3) * (BOX_WIDTH + 50) + 50, y: Math.floor(index / 3) * (BOX_HEIGHT + 50) + 50 },
                         style: { width: BOX_WIDTH, height: BOX_HEIGHT },
-                        draggable: false,
-                        selectable: false // שלא יבחרו בטעות את הקופסה
+                        draggable: true, // <--- שינוי ל-TRUE: מאפשר סידור חופשי
+                        selectable: true,
+                        zIndex: -1 // חשוב כדי שהסימפטומים יהיו מעל
                     });
                 });
 
-                // סימפטומים קיימים
+                // 2. יצירת סימפטומים
                 (maps || []).forEach((map, index) => {
                     const symptom = defs.symptoms.find(s => s.id === map.symptom_id);
                     if (symptom) {
@@ -175,7 +177,7 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
         fetchData();
     }, [API_URL, onLogout, setNodes]);
 
-    // --- חישובים ---
+    // --- פונקציות עזר ---
     const findTargetBox = useCallback((x, y, currentNodes) => {
         return currentNodes.find(n => 
             n.type === 'specialtyBox' &&
@@ -184,27 +186,12 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
         );
     }, []);
 
-    // בדיקה האם הפתקית מעל הפח
-    const checkTrashIntersection = useCallback((nodeAbsX, nodeAbsY) => {
-        // מיקום הפח: תחתית המסך משמאל (קבוע)
-        // אזור הפח הוא בערך: left: 20-100px, bottom: 20-100px
-        // נשתמש בחישוב יחסי לגודל הקנבס
-        if (!reactFlowWrapper.current) return false;
-        const bounds = reactFlowWrapper.current.getBoundingClientRect();
-        
-        // המרת קואורדינטות מסך לקואורדינטות פנימיות של ה-Flow לא תעזור כאן,
-        // כי הפח הוא "סטטי" על המסך (Overlay), וה-Nodes זזים ב-Zoom/Pan.
-        // *פתרון:* אנחנו בודקים את מיקום העכבר (Event) ולא את מיקום ה-Node.
-        return false; 
-    }, []);
-
-    // --- Drag Over (HTML5) ---
+    // --- Drag & Drop ---
     const onDragOver = useCallback((event) => {
         event.preventDefault();
         event.dataTransfer.dropEffect = 'move';
     }, []);
 
-    // --- Drop (HTML5 - יצירה מהבנק) ---
     const onDrop = useCallback((event) => {
         event.preventDefault();
         const symptomDataStr = event.dataTransfer.getData('application/reactflow');
@@ -234,61 +221,68 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
         });
     }, [project, findTargetBox, setNodes]);
 
-    // --- Node Drag (בתוך הקנבס) ---
+    // --- גרירה בתוך הקנבס ---
     const onNodeDrag = useCallback((event, node) => {
-        // 1. בדיקת פח: נשתמש במיקום העכבר מה-event
-        // הפח נמצא בפינה השמאלית התחתונה של הקונטיינר
-        const containerBounds = reactFlowWrapper.current.getBoundingClientRect();
-        const mouseX = event.clientX - containerBounds.left;
-        const mouseY = event.clientY - containerBounds.top;
-        const containerHeight = containerBounds.height;
+        // 1. בדיקת פח: נשתמש בקואורדינטות מסך (Client) כי הפח הוא Fixed
+        // אזור הפח בפינה השמאלית התחתונה של ה-VIEWPORT
+        const trashZoneSize = 120; // אזור רגישות גדול יותר
+        const viewportHeight = window.innerHeight;
+        // הפח ממוקם ב-left: 20, bottom: 20 בתוך ה-Panel
+        // אזור הרגישות: X < 150, Y > גובה מסך - 150
+        const isOverTrash = (event.clientX < 280 + trashZoneSize && event.clientY > viewportHeight - trashZoneSize); // 280 זה רוחב הסרגל בערך
         
-        // אזור הפח: 20px משמאל, 20px מלמטה, גודל 60x60
-        const isOverTrash = (mouseX < 100 && mouseY > containerHeight - 100);
-        setTrashHighlighted(isOverTrash);
+        // בדיקה מתוקנת: הפח נמצא בתוך הקנבס (משמאל), בפינה למטה
+        // נבדוק ביחס ל-bounding rect של הקנבס
+        const bounds = reactFlowWrapper.current.getBoundingClientRect();
+        const mouseXInCanvas = event.clientX - bounds.left;
+        const mouseYInCanvas = event.clientY - bounds.top;
+        
+        // הפח נמצא ב-Panel bottom-left
+        // אז אם העכבר בפינה השמאלית התחתונה של הקנבס
+        const isOverTrashReal = (mouseXInCanvas < 100 && mouseYInCanvas > bounds.height - 100);
 
-        // 2. בדיקת קופסאות (Highlight)
-        setNodes(nds => {
-            let absX = node.position.x;
-            let absY = node.position.y;
-            if (node.parentNode) {
-                 const p = nds.find(n => n.id === node.parentNode);
-                 if (p) { absX += p.position.x; absY += p.position.y; }
-            }
-            const targetBox = findTargetBox(absX + 50, absY + 20, nds);
-            const targetId = targetBox ? targetBox.id : null;
+        setTrashHighlighted(isOverTrashReal);
 
-            return nds.map(n => {
-                if (n.type === 'specialtyBox') {
-                    const shouldHighlight = n.id === targetId;
-                    if (n.data.isHighlighted !== shouldHighlight) return { ...n, data: { ...n.data, isHighlighted: shouldHighlight } };
+        // 2. Highlight לקופסאות (רק אם גוררים פתקית)
+        if (node.type === 'symptomPill') {
+            setNodes(nds => {
+                let absX = node.position.x;
+                let absY = node.position.y;
+                if (node.parentNode) {
+                    const p = nds.find(n => n.id === node.parentNode);
+                    if (p) { absX += p.position.x; absY += p.position.y; }
                 }
-                return n;
+                const targetBox = findTargetBox(absX + 50, absY + 20, nds);
+                const targetId = targetBox ? targetBox.id : null;
+                return nds.map(n => {
+                    if (n.type === 'specialtyBox') {
+                        const shouldHighlight = n.id === targetId;
+                        if (n.data.isHighlighted !== shouldHighlight) return { ...n, data: { ...n.data, isHighlighted: shouldHighlight } };
+                    }
+                    return n;
+                });
             });
-        });
+        }
     }, [findTargetBox, setNodes]);
 
-    // --- סיום גרירה ---
     const onNodeDragStop = useCallback((event, node) => {
-        // בדיקה אם שחררנו על הפח
-        const containerBounds = reactFlowWrapper.current.getBoundingClientRect();
-        const mouseX = event.clientX - containerBounds.left;
-        const mouseY = event.clientY - containerBounds.top;
-        const containerHeight = containerBounds.height;
-        const isOverTrash = (mouseX < 100 && mouseY > containerHeight - 100);
+        setTrashHighlighted(false);
+        
+        // אם גוררים קופסה - לא עושים כלום (נותנים לה לזוז)
+        if (node.type === 'specialtyBox') return;
 
-        if (isOverTrash) {
-            // מחיקה!
+        // לוגיקת הפח
+        const bounds = reactFlowWrapper.current.getBoundingClientRect();
+        const mouseXInCanvas = event.clientX - bounds.left;
+        const mouseYInCanvas = event.clientY - bounds.top;
+        if (mouseXInCanvas < 100 && mouseYInCanvas > bounds.height - 100) {
             setNodes((nds) => nds.filter((n) => n.id !== node.id));
-            setTrashHighlighted(false);
             return;
         }
 
-        setTrashHighlighted(false);
-
+        // לוגיקת שיוך
         setNodes((nds) => {
             const cleanNodes = nds.map(n => n.type === 'specialtyBox' ? { ...n, data: { ...n.data, isHighlighted: false } } : n);
-            
             let absX = node.position.x;
             let absY = node.position.y;
             const oldParent = cleanNodes.find(p => p.id === node.parentNode);
@@ -343,13 +337,12 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
     return (
         <div className="bg-white rounded-lg shadow h-full flex flex-col overflow-hidden" style={{ height: '85vh' }}>
             <div className="flex justify-between items-center p-4 border-b bg-white z-10">
-                <h3 className="text-2xl font-bold text-text-dark">מיפוי סימפטומים</h3>
+                <h3 className="text-2xl font-bold text-text-dark">מפת האבחון</h3>
                 <button onClick={handleSave} className="px-6 py-2 bg-blue-600 text-white rounded-full font-bold hover:bg-blue-700 shadow-md">💾 שמור שינויים</button>
             </div>
             
             <div className="flex flex-grow relative" style={{ height: '100%' }}>
                 
-                {/* אזור המשטח - משמאל */}
                 <div className="flex-grow relative h-full" ref={reactFlowWrapper}>
                     <ReactFlow
                         nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
@@ -357,28 +350,30 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
                         onNodeContextMenu={onNodeContextMenu} onPaneClick={onPaneClick}
                         onDragOver={onDragOver} onDrop={onDrop}
                         nodeTypes={nodeTypes} fitView
-                        deleteKeyCode={['Backspace', 'Delete']} // הפעלת מחיקה במקלדת
+                        deleteKeyCode={['Backspace', 'Delete']}
                     >
                         <Background color="#cbd5e1" gap={25} />
-                        <Controls position="top-right" />
+                        <Controls position="top-left" />
                         
-                        {/* --- הפח! --- */}
-                        <div 
-                            style={{
-                                position: 'absolute', bottom: '20px', left: '20px',
-                                width: trashHighlighted ? '80px' : '60px', 
-                                height: trashHighlighted ? '80px' : '60px',
-                                borderRadius: '50%',
-                                backgroundColor: trashHighlighted ? '#fee2e2' : 'white',
-                                border: trashHighlighted ? '3px solid #ef4444' : '1px solid #cbd5e1',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                                transition: 'all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                                zIndex: 2000, pointerEvents: 'none' // קריטי: pointerEvents כדי לא להפריע לגרירה
-                            }}
-                        >
-                            <span style={{ fontSize: trashHighlighted ? '40px' : '30px', transition: 'all 0.2s' }}>🗑️</span>
-                        </div>
+                        {/* שימוש ב-Panel עבור הפח - מבטיח מיקום קבוע בפינה */}
+                        <Panel position="bottom-left" style={{ margin: '20px' }}>
+                            <div 
+                                style={{
+                                    width: trashHighlighted ? '80px' : '60px', 
+                                    height: trashHighlighted ? '80px' : '60px',
+                                    borderRadius: '50%',
+                                    backgroundColor: trashHighlighted ? '#fee2e2' : 'white',
+                                    border: trashHighlighted ? '3px solid #ef4444' : '2px solid #cbd5e1',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                    transition: 'all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                                    cursor: 'default'
+                                }}
+                            >
+                                <span style={{ fontSize: trashHighlighted ? '40px' : '30px', transition: 'all 0.2s' }}>🗑️</span>
+                            </div>
+                        </Panel>
+
                     </ReactFlow>
 
                     {contextMenu && (
@@ -390,7 +385,6 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
                     )}
                 </div>
 
-                {/* הבנק - מימין */}
                 <Sidebar symptoms={allSymptoms} />
                 
             </div>
