@@ -1,10 +1,10 @@
-// src/components/ProfileEditor.jsx - V2.0 (Shared Specialties Filter)
+// src/components/ProfileEditor.jsx - V3.0 (Payment Integration + Shared Specialties)
 import React, { useState, useEffect, useRef } from 'react';
 import ImageCropper from './ImageCropper';
 import { getCroppedImg } from '../utils/cropImage';
 import AgeRangeSelector from './AgeRangeSelector.jsx'; 
 
-// --- Helper Components ---
+// --- רכיבי עזר פנימיים ---
 const AlertMessage = ({ type, message, onDismiss }) => {
     if (!message) return null;
     const baseClasses = "px-4 py-3 rounded relative mb-6 text-right";
@@ -20,15 +20,25 @@ const AlertMessage = ({ type, message, onDismiss }) => {
         </div>
     );
 };
+
 const ButtonSpinner = ({ color = 'primary-blue' }) => ( <div className={`spinner w-5 h-5 border-t-white border-r-white border-b-white border-l-${color}`}></div> );
+
 const LoadingSpinner = () => ( <div className="text-center p-10"><div className="spinner"></div></div> );
+
 const Checkbox = ({ label, checked, onChange, name }) => (
     <label className="flex items-center space-x-2 space-x-reverse cursor-pointer">
-        <input type="checkbox" name={name} checked={checked} onChange={onChange} className="h-4 w-4 rounded border-gray-300 text-primary-blue focus:ring-primary-blue"/>
+        <input 
+            type="checkbox" 
+            name={name} 
+            checked={checked} 
+            onChange={onChange} 
+            className="h-4 w-4 rounded border-gray-300 text-primary-blue focus:ring-primary-blue"
+        />
         <span className="text-sm font-medium text-gray-700">{label}</span>
     </label>
 );
 
+// --- הקומפוננטה הראשית ---
 const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
     const [formData, setFormData] = useState({
         full_name: '', email: '', phone_number: '', bio: '', profession_id: '',
@@ -51,11 +61,12 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
     const [savingImage, setSavingImage] = useState(false);
     const [message, setMessage] = useState(null);
     const [error, setError] = useState(null);
+    
     const fileInputRef = useRef(null);
     const [imageToCrop, setImageToCrop] = useState(null);
     const [isCropping, setIsCropping] = useState(false);
 
-    // Fetch Data
+    // --- 1. טעינת נתונים ראשונית ---
     useEffect(() => {
         let isMounted = true;
         const fetchInitialData = async () => {
@@ -106,7 +117,7 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
                         whatsapp_number: profileData.whatsapp_number || '',
                         is_verified: profileData.is_verified || 0,
                         is_accessible: !!profileData.is_accessible,
-                        offers_reduced_fee: !!profileData.offers_reduced_fee
+                        offers_reduced_fee: !!profileData.offers_reduced_fee // זה בעצם הסטטוס (PRO) כרגע
                     });
                 }
             } catch (err) { if (isMounted) setError(err.message); } 
@@ -116,18 +127,21 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
         return () => { isMounted = false; };
     }, [API_URL, user, onLogout]); 
 
-    // --- Filter Logic (Shared Specialties) ---
+    // --- 2. לוגיקה חכמה לסינון התמחויות (כולל משותפות) ---
     useEffect(() => {
          if (formData.profession_id && allSpecialties?.length > 0) {
              const professionIdNum = parseInt(formData.profession_id, 10);
              
-             // מציאת קטגוריה ראשית
+             // מציאת הקטגוריה הראשית של המקצוע הנבחר
              const selectedProfession = professions.find(p => p.id === professionIdNum);
              const mainCategoryId = selectedProfession ? selectedProfession.main_category_id : null;
 
              setFilteredSpecialties(allSpecialties.filter(spec => {
+                 // תנאי 1: שייך ישירות למקצוע (ספציפי)
                  const isDirect = spec.profession_id === professionIdNum;
+                 // תנאי 2: שייך לקטגוריה הראשית (כללי) ואין לו מקצוע ספציפי
                  const isShared = spec.main_category_id === mainCategoryId && !spec.profession_id;
+                 
                  return isDirect || isShared;
              }));
          } else {
@@ -135,13 +149,13 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
          }
      }, [formData.profession_id, allSpecialties, professions]);
 
-    // Handlers
+    // --- 3. טיפול בשדות טופס ---
     const handleChange = (e) => {
          const { name, value, type, checked } = e.target;
          setFormData(prev => {
             let newValue = type === 'checkbox' ? checked : (type === 'number' ? (parseInt(value, 10) || 0) : value);
             const newState = { ...prev, [name]: newValue };
-            if (name === 'profession_id') newState.specialties = [];
+            if (name === 'profession_id') newState.specialties = []; // איפוס התמחויות בעת החלפת מקצוע
             return newState;
          });
          setMessage(null); setError(null);
@@ -173,7 +187,7 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
          });
     };
 
-    // Image Logic
+    // --- 4. טיפול בתמונות ---
     const handleImageClick = () => { if (fileInputRef.current) fileInputRef.current.value = null; fileInputRef.current?.click(); };
     const onFileChange = (e) => {
         const file = e.target.files?.[0]; if (!file) return;
@@ -198,7 +212,29 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
         } catch (err) { setError(err.message); } finally { setSavingImage(false); }
     };
 
-    // Submit Logic
+    // --- 5. טיפול בתשלום (מנגנון השדרוג החדש) ---
+    const handleUpgrade = async () => {
+        if (!window.confirm('האם ברצונך לעבור לעמוד תשלום מאובטח (סימולציה)?')) return;
+        
+        try {
+            const res = await fetch(`${API_URL}/api/payment/checkout`, { 
+                method: 'POST', 
+                credentials: 'include' 
+            });
+            
+            const data = await res.json();
+            if (data.paymentUrl) {
+                window.location.href = data.paymentUrl; // הפניה לדף התשלום
+            } else {
+                alert('שגיאה ביצירת תשלום. אנא נסה שנית.');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('שגיאת תקשורת');
+        }
+    };
+
+    // --- 6. שמירת נתונים ---
     const handleProfileSubmit = async (e) => {
         e.preventDefault(); setSavingProfile(true); setError(null); setMessage(null);
         try {
@@ -234,6 +270,7 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
         } catch (err) { setError(err.message); } finally { setSavingAvailability(false); }
     };
 
+    // --- רינדור ---
     if (loading) return <LoadingSpinner />;
     if (error && !formData.email) return <AlertMessage type="error" message={error} onDismiss={() => setError(null)} />;
 
@@ -243,103 +280,144 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
             <AlertMessage type="success" message={message} onDismiss={() => setMessage(null)} />
             {error && <AlertMessage type="error" message={error} onDismiss={() => setError(null)} />}
 
+            {/* אזור סטטוס מנוי ושדרוג */}
+            <div className="mb-6 p-4 bg-gradient-to-l from-purple-100 to-white border border-purple-200 rounded-lg flex justify-between items-center shadow-sm">
+                <div>
+                    <h4 className="font-bold text-purple-900 text-lg">סטטוס מנוי: {formData.offers_reduced_fee ? '💎 PRO (פעיל)' : 'רגיל (חינם)'}</h4>
+                    <p className="text-sm text-purple-700 mt-1">שדרג ל-PRO כדי להופיע בראש התוצאות ולקבל יותר פניות.</p>
+                </div>
+                {!formData.offers_reduced_fee && (
+                    <button 
+                        type="button" 
+                        onClick={handleUpgrade}
+                        className="px-6 py-2 bg-purple-600 text-white rounded-lg font-bold hover:bg-purple-700 shadow-md transition transform hover:scale-105"
+                    >
+                        שדרג עכשיו 🚀
+                    </button>
+                )}
+            </div>
+
             <form onSubmit={handleProfileSubmit} className="bg-white p-6 md:p-8 rounded-lg shadow w-full mx-auto text-right">
                 <h3 className="text-xl font-bold text-text-dark mb-6 border-b pb-3">פרטי פרופיל ומידע מקצועי</h3>
                 
+                {/* סטטוס אימות */}
                 {formData.is_verified === 1 ? (
-                    <div className="mb-6 p-4 bg-green-50 border border-green-300 rounded-lg text-green-800 text-center font-semibold">✔️ הפרופיל מאומת</div>
+                    <div className="mb-6 p-3 bg-green-50 border border-green-300 rounded-lg text-green-800 text-center font-semibold text-sm">✔️ הפרופיל מאומת</div>
                 ) : (
-                    <div className="mb-6 p-4 bg-yellow-50 border border-yellow-300 rounded-lg text-yellow-800 text-center font-semibold">⚠️ ממתין לאימות</div>
+                    <div className="mb-6 p-3 bg-yellow-50 border border-yellow-300 rounded-lg text-yellow-800 text-center font-semibold text-sm">⚠️ ממתין לאימות מנהל</div>
                 )}
                 
                 <div className="flex flex-col-reverse md:flex-row gap-8 md:gap-12">
+                    {/* עמודת תמונה ופרטי קשר */}
                     <div className="w-full md:w-56 flex flex-col items-center space-y-5 flex-shrink-0">
                          <div className="relative cursor-pointer group" onClick={handleImageClick} title="לחץ להחלפת תמונה">
                               <div className="w-32 h-32 md:w-36 md:h-36 rounded-full overflow-hidden border-4 border-primary-blue/60 shadow-lg bg-gray-100 flex items-center justify-center">
                                   {savingImage ? <div className="spinner w-8 h-8"></div> : <img src={formData.profile_image_url || '/default-profile.png'} alt="פרופיל" className="w-full h-full object-cover" onError={(e) => e.target.src = '/default-profile.png'} />}
                               </div>
+                              <div className="absolute inset-0 rounded-full bg-black bg-opacity-40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                   <span className="text-white text-xs font-bold">שנה תמונה</span>
+                              </div>
                          </div>
                          <input type="file" ref={fileInputRef} onChange={onFileChange} accept="image/png, image/jpeg, image/jpg" className="hidden"/>
+                         
                          <div className="w-full text-center space-y-3 pt-4 border-t border-gray-200">
-                             <div> <label className="block text-xs font-medium text-gray-400">דוא"ל</label> <p className="text-sm text-gray-700">{formData.email}</p> </div>
+                             <div> <label className="block text-xs font-medium text-gray-400">דוא"ל</label> <p className="text-sm text-gray-700 break-all">{formData.email}</p> </div>
                              <div> <label className="block text-xs font-medium text-gray-400">טלפון</label> <input type="tel" name="phone_number" value={formData.phone_number || ''} onChange={handleChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-sm text-center" style={{ direction: 'ltr' }}/> </div>
                              <div> <label className="block text-xs font-medium text-gray-400">WhatsApp</label> <input type="tel" name="whatsapp_number" value={formData.whatsapp_number || ''} onChange={handleChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-sm text-center" style={{ direction: 'ltr' }}/> </div>
                          </div>
                     </div>
 
+                    {/* עמודת פרטים */}
                     <div className="flex-1 space-y-6">
                         <div> <label className="block text-sm font-medium text-gray-700 mb-1">שם מלא</label> <input type="text" name="full_name" value={formData.full_name} onChange={handleChange} required className="block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm"/> </div>
+                        
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                              <div> <label className="block text-sm font-medium text-gray-700 mb-1">מקצוע</label> <select name="profession_id" value={formData.profession_id} onChange={handleChange} required className="block w-full px-4 py-2 border border-gray-300 rounded-lg bg-white"> <option value="" disabled>-- בחר --</option> {professions.map(p => ( <option key={p.id} value={p.id}>{p.name}</option> ))} </select> </div>
                              <div> <label className="block text-sm font-medium text-gray-700 mb-1">שנות נסיון</label> <input type="number" name="years_of_practice" value={formData.years_of_practice} onChange={handleChange} min="0" max="60" className="block w-full px-4 py-2 border border-gray-300 rounded-lg"/> </div>
                              <div> <label className="block text-sm font-medium text-gray-700 mb-1">מספר רישיון</label> <input type="text" name="license_number" value={formData.license_number || ''} onChange={handleChange} className="block w-full px-4 py-2 border border-gray-300 rounded-lg"/> </div>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-gray-100">
-                             <Checkbox label="קליניקה נגישה" name="is_accessible" checked={formData.is_accessible} onChange={handleChange} />
-                             <Checkbox label="תעריף מוזל" name="offers_reduced_fee" checked={formData.offers_reduced_fee} onChange={handleChange} />
-                        </div>
-                        <div> <label className="block text-sm font-medium text-gray-700 mb-1">קצת עלי</label> <textarea name="bio" value={formData.bio || ''} onChange={handleChange} rows="4" className="block w-full px-4 py-2 border border-gray-300 rounded-lg"/> </div>
                         
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-gray-100">
+                             <Checkbox label="קליניקה נגישה לנכים" name="is_accessible" checked={formData.is_accessible} onChange={handleChange} />
+                             {/* צ'קבוקס תעריף מוזל הוסר כי הוא כרגע מנוהל ע"י הסטטוס, או שניתן להשאירו כשדה מידע */}
+                        </div>
+
+                        <div> <label className="block text-sm font-medium text-gray-700 mb-1">קצת עלי / גישה טיפולית</label> <textarea name="bio" value={formData.bio || ''} onChange={handleChange} rows="4" className="block w-full px-4 py-2 border border-gray-300 rounded-lg"/> </div>
+                        
+                        {/* בחירת התמחויות (מסונן חכם) */}
                         <div>
-                           <label className="block text-sm font-medium text-gray-700 mb-2">התמחויות (שפת מטפל)</label>
+                           <label className="block text-sm font-medium text-gray-700 mb-2">התמחויות</label>
                            {formData.profession_id ? (
-                               <div className="flex flex-wrap gap-2">
+                               <div className="flex flex-wrap gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200 max-h-48 overflow-y-auto">
                                    {filteredSpecialties.length > 0 ? filteredSpecialties.map(spec => (
-                                       <button key={spec.id} type="button" onClick={() => handleSpecialtyToggle(spec.id)} className={`px-3 py-1 rounded-full border text-xs font-medium transition ${ formData.specialties.includes(spec.id) ? 'bg-primary-blue text-white' : 'bg-gray-50 text-gray-600' }`}>
+                                       <button 
+                                            key={spec.id} 
+                                            type="button" 
+                                            onClick={() => handleSpecialtyToggle(spec.id)} 
+                                            className={`px-3 py-1 rounded-full border text-xs font-medium transition ${ formData.specialties.includes(spec.id) ? 'bg-primary-blue text-white border-primary-blue' : 'bg-white text-gray-600 border-gray-300 hover:border-primary-blue' }`}
+                                        >
                                            {spec.name}
                                        </button>
-                                   )) : <p className="text-xs text-gray-500">אין התמחויות זמינות.</p>}
+                                   )) : <p className="text-xs text-gray-500">לא נמצאו התמחויות רלוונטיות.</p>}
                                </div>
-                           ) : ( <p className="text-xs text-gray-500">בחר מקצוע תחילה.</p> )}
+                           ) : ( <p className="text-xs text-gray-500">בחר מקצוע כדי לראות התמחויות.</p> )}
                         </div>
                         
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">טווחי גילאים</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">טווחי גילאים לטיפול</label>
                           <AgeRangeSelector value={formData.age_ranges} onChange={(newRanges) => setFormData(prev => ({ ...prev, age_ranges: newRanges }))} />
                         </div>
 
                         <div>
-                             <label className="block text-sm font-medium text-gray-700 mb-2">מיקומים</label>
+                             <label className="block text-sm font-medium text-gray-700 mb-2">מיקומי קליניקה</label>
                             <div className="space-y-3">
                                 {(formData.locations || []).map((loc, index) => (
                                     <div key={index} className="grid grid-cols-3 gap-2 p-2 border rounded-md bg-gray-50">
-                                         <input type="text" placeholder="עיר" value={loc.city || ''} onChange={(e) => handleLocationChange(index, 'city', e.target.value)} className="col-span-2 px-3 py-1 border rounded-md"/>
+                                         <input type="text" placeholder="עיר (למשל: תל אביב)" value={loc.city || ''} onChange={(e) => handleLocationChange(index, 'city', e.target.value)} className="col-span-2 px-3 py-1 border rounded-md"/>
                                          <select value={loc.region || ''} onChange={(e) => handleLocationChange(index, 'region', e.target.value)} className="col-span-1 px-2 py-1 border rounded-md bg-white">
-                                            <option value="" disabled>-- בחר --</option>
+                                            <option value="" disabled>-- אזור --</option>
                                             {defRegions.map(r => ( <option key={r.region_key} value={r.region_key}>{r.region_name_he}</option> ))}
                                          </select>
-                                         <button type="button" onClick={() => removeLocation(index)} className="col-span-3 text-xs text-red-500 text-center">הסר מיקום</button>
+                                         <button type="button" onClick={() => removeLocation(index)} className="col-span-3 text-xs text-red-500 text-center hover:underline">הסר מיקום זה</button>
                                     </div>
                                 ))}
                             </div>
-                            <button type="button" onClick={addLocation} className="mt-3 text-sm text-primary-blue font-medium">+ הוסף מיקום</button>
+                            <button type="button" onClick={addLocation} className="mt-3 text-sm text-primary-blue font-medium hover:underline">+ הוסף מיקום נוסף</button>
                         </div>
 
                         <div className="pt-6 border-t border-gray-200 flex justify-start">
-                             <button type="submit" disabled={savingProfile} className="py-2.5 px-6 bg-primary-blue text-white rounded-lg font-semibold hover:bg-secondary-purple disabled:opacity-50">{savingProfile ? <ButtonSpinner /> : 'שמור שינויים'}</button>
+                             <button type="submit" disabled={savingProfile} className="py-2.5 px-8 bg-primary-blue text-white rounded-lg font-bold hover:bg-secondary-purple disabled:opacity-50 transition shadow-md">
+                                {savingProfile ? <ButtonSpinner /> : 'שמור שינויי פרופיל'}
+                             </button>
                          </div>
                     </div>
                 </div>
             </form>
 
             <div className="bg-white p-6 md:p-8 rounded-lg shadow w-full mx-auto text-right">
-                <h3 className="text-xl font-bold text-text-dark mb-4">זמינות שבועית</h3>
+                <h3 className="text-xl font-bold text-text-dark mb-4">ניהול זמינות שבועית</h3>
+                <p className="text-sm text-gray-500 mb-4">סמן את השעות בהן את/ה פנוי/ה לקבלת מטופלים.</p>
                 <div className="overflow-x-auto pb-4">
                     <table className="min-w-full border-collapse border border-gray-200">
                          <thead className="bg-gray-50">
                             <tr>
-                                <th className="px-3 py-2 text-right border border-gray-200">יום</th>
-                                {defSlots.map(slot => ( <th key={slot} className="px-3 py-2 text-center border border-gray-200">{slot}</th> ))}
+                                <th className="px-3 py-2 text-right border border-gray-200 text-gray-600 font-semibold">יום</th>
+                                {defSlots.map(slot => ( <th key={slot} className="px-3 py-2 text-center border border-gray-200 text-gray-600 font-semibold">{slot}</th> ))}
                             </tr>
                         </thead>
                         <tbody className="bg-white">
                             {defDays.map(day => (
                                 <tr key={day}>
-                                    <td className="px-3 py-3 text-sm font-medium border border-gray-200">{day}</td>
+                                    <td className="px-3 py-3 text-sm font-medium border border-gray-200 bg-gray-50/50">{day}</td>
                                     {defSlots.map(slot => {
                                         const isSelected = formData.availability?.[day]?.includes(slot);
                                         return (
-                                            <td key={slot} className={`border border-gray-200 cursor-pointer ${isSelected ? 'bg-primary-blue/80' : 'bg-white'}`} onClick={() => handleAvailabilityToggle(day, slot)}></td>
+                                            <td 
+                                                key={slot} 
+                                                className={`border border-gray-200 cursor-pointer transition-colors ${isSelected ? 'bg-primary-blue/80 hover:bg-primary-blue' : 'bg-white hover:bg-gray-100'}`} 
+                                                onClick={() => handleAvailabilityToggle(day, slot)}
+                                                title={isSelected ? 'פנוי (לחץ לביטול)' : 'לא פנוי (לחץ להוספה)'}
+                                            ></td>
                                         );
                                     })}
                                 </tr>
@@ -348,7 +426,9 @@ const ProfileEditor = ({ API_URL, user, onUpdateSuccess, onLogout }) => {
                     </table>
                 </div>
                  <div className="mt-6 pt-6 border-t border-gray-200 flex justify-start">
-                     <button type="button" onClick={handleAvailabilitySubmit} disabled={savingAvailability} className="py-2.5 px-6 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 disabled:opacity-50">{savingAvailability ? <ButtonSpinner color="green-500"/> : 'שמור זמינות'}</button>
+                     <button type="button" onClick={handleAvailabilitySubmit} disabled={savingAvailability} className="py-2.5 px-8 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 disabled:opacity-50 transition shadow-md">
+                        {savingAvailability ? <ButtonSpinner color="green-500"/> : 'שמור שינויי זמינות'}
+                    </button>
                  </div>
             </div>
         </div>
