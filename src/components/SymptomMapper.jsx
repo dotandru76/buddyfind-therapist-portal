@@ -1,5 +1,5 @@
-// src/components/SymptomMapper.jsx - V8.0 (Free Drag & Fixed Menu)
-import React, { useState, useEffect, useCallback } from 'react';
+// src/components/SymptomMapper.jsx - V9.0 (Node-RED Style / Palette & Canvas)
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactFlow, {
   ReactFlowProvider,
   useNodesState,
@@ -13,12 +13,12 @@ import 'reactflow/dist/style.css';
 import LoadingSpinner from './LoadingSpinner';
 import ContextMenu from './ContextMenu';
 
-// מידות קבועות
+// מידות
 const BOX_WIDTH = 280;
 const BOX_HEIGHT = 280;
-const SIDEBAR_WIDTH = 320;
 
-// --- 1. רכיבי צמתים ---
+// --- 1. רכיבי צמתים (עיצוב) ---
+
 const SpecialtyBoxNode = ({ data }) => {
     const isHighlighted = data.isHighlighted;
     return (
@@ -41,6 +41,11 @@ const SpecialtyBoxNode = ({ data }) => {
             }}>
                 {data.label}
             </div>
+            {isHighlighted && (
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563EB', fontWeight: 'bold', opacity: 0.5 }}>
+                    שחרר כאן 🎯
+                </div>
+            )}
         </div>
     );
 };
@@ -59,13 +64,50 @@ const SymptomPillNode = ({ data }) => (
 const nodeTypes = { specialtyBox: SpecialtyBoxNode, symptomPill: SymptomPillNode };
 const colors = ['#dbeafe', '#dcfce7', '#fef9c3', '#fee2e2', '#f3e8ff', '#ffedd5'];
 
-// --- 2. רכיב התוכן ---
+// --- 2. רכיב צד (הבנק) ---
+const Sidebar = ({ symptoms }) => {
+    const onDragStart = (event, symptom) => {
+        // שומרים את המידע של הסימפטום כדי שנוכל לקרוא אותו ב-Drop
+        event.dataTransfer.setData('application/reactflow', JSON.stringify(symptom));
+        event.dataTransfer.effectAllowed = 'move';
+    };
+
+    return (
+        <div style={{ 
+            width: '250px', borderLeft: '1px solid #e2e8f0', padding: '15px', 
+            background: 'white', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px'
+        }}>
+            <h4 style={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '10px' }}>בנק סימפטומים</h4>
+            <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '10px' }}>
+                גרור סימפטום למשטח כדי ליצור עותק.
+            </div>
+            {symptoms.map((sym) => (
+                <div 
+                    key={sym.id}
+                    onDragStart={(event) => onDragStart(event, sym)}
+                    draggable
+                    style={{
+                        padding: '8px 12px', background: '#f1f5f9', border: '1px solid #cbd5e1',
+                        borderRadius: '8px', cursor: 'grab', fontSize: '13px', color: '#334155',
+                        fontWeight: '500', userSelect: 'none'
+                    }}
+                >
+                    {sym.name}
+                </div>
+            ))}
+        </div>
+    );
+};
+
+// --- 3. רכיב המשטח ---
 const SymptomMapperContent = ({ API_URL, onLogout }) => {
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]); 
+    const [allSymptoms, setAllSymptoms] = useState([]); // רשימת הבנק
     const [loading, setLoading] = useState(true);
     const [contextMenu, setContextMenu] = useState(null);
-    const [isSidebarHighlighted, setSidebarHighlighted] = useState(false);
+    const reactFlowWrapper = useRef(null);
+    const { project } = useReactFlow(); // המרה לקואורדינטות
 
     // טעינת נתונים
     useEffect(() => {
@@ -83,47 +125,45 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
                 const defs = await defsRes.json();
                 const maps = await mapsRes.json();
                 
+                setAllSymptoms(defs.symptoms || []); // שמירת הבנק
+
                 const initialNodes = [];
                 
-                // קופסאות
+                // 1. יצירת קופסאות (התמחויות)
                 (defs.specialties || []).forEach((spec, index) => {
                     initialNodes.push({
                         id: `spec-${spec.id}`,
                         type: 'specialtyBox',
                         data: { label: spec.name, color: colors[index % colors.length], id: spec.id, isHighlighted: false },
-                        position: { x: (index % 3) * (BOX_WIDTH + 50) + (SIDEBAR_WIDTH + 50), y: Math.floor(index / 3) * (BOX_HEIGHT + 50) + 50 },
+                        // מיקום התחלתי של הקופסאות
+                        position: { x: (index % 3) * (BOX_WIDTH + 50) + 50, y: Math.floor(index / 3) * (BOX_HEIGHT + 50) + 50 },
                         style: { width: BOX_WIDTH, height: BOX_HEIGHT },
-                        draggable: false
+                        draggable: false // קופסאות נעולות
                     });
                 });
 
-                // סימפטומים
-                let unassignedY = 0;
-                (defs.symptoms || []).forEach((sym, index) => {
-                    const mapping = Array.isArray(maps) ? maps.find(m => m.symptom_id === sym.id) : null;
-                    const isAssigned = !!mapping;
-                    
-                    let position = { x: 0, y: 0 }; 
-                    let parentNode = undefined;
+                // 2. יצירת סימפטומים *שכבר משויכים* (היסטוריה)
+                // אנחנו עוברים על המיפויים הקיימים ויוצרים nodes
+                (maps || []).forEach((map, index) => {
+                    const symptom = defs.symptoms.find(s => s.id === map.symptom_id);
+                    if (symptom) {
+                        const uniqueId = `assigned-${map.symptom_id}-${map.specialty_id}-${index}`;
+                        const parentId = `spec-${map.specialty_id}`;
+                        
+                        // פיזור רנדומלי יפה בתוך הקופסה
+                        const randX = 20 + Math.random() * (BOX_WIDTH - 140);
+                        const randY = 50 + Math.random() * (BOX_HEIGHT - 80);
 
-                    if (isAssigned) {
-                        parentNode = `spec-${mapping.specialty_id}`;
-                        position = { x: 20 + (index % 2) * 120, y: 50 + Math.floor((index % 10) / 2) * 40 };
-                    } else {
-                        position = { x: 30, y: 80 + unassignedY * 50 };
-                        unassignedY++;
+                        initialNodes.push({
+                            id: uniqueId,
+                            type: 'symptomPill',
+                            data: { label: symptom.name, id: symptom.id },
+                            position: { x: randX, y: randY },
+                            parentNode: parentId,
+                            draggable: true,
+                            zIndex: 100
+                        });
                     }
-
-                    initialNodes.push({
-                        id: `sym-${sym.id}`,
-                        type: 'symptomPill',
-                        data: { label: sym.name, id: sym.id },
-                        position: position,
-                        parentNode: parentNode,
-                        // הוסר extent: 'parent' כדי לאפשר הוצאה
-                        draggable: true,
-                        zIndex: 100
-                    });
                 });
 
                 setNodes(initialNodes);
@@ -132,129 +172,122 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
         fetchData();
     }, [API_URL, onLogout, setNodes]);
 
-    // --- זיהוי חפיפה ---
-    // משתמשים ב-getBoundingClientRect כדי להיות מדויקים עם מה שהמשתמש רואה
-    // אבל בגלל שזה מסובך בתוך קנבס, נשתמש בחישוב מתמטי לפי קואורדינטות
-    const findTargetBox = useCallback((node, currentNodes) => {
-        // חישוב המיקום האבסולוטי של הפתקית
-        let absX = node.position.x;
-        let absY = node.position.y;
-
-        // אם הפתקית היא כרגע "ילד", המיקום שלה יחסי. נוסיף את מיקום ההורה.
-        if (node.parentNode) {
-            const parent = currentNodes.find(n => n.id === node.parentNode);
-            if (parent) {
-                absX += parent.position.x;
-                absY += parent.position.y;
-            }
-        }
-
-        const centerX = absX + 50; // מרכז משוער
-        const centerY = absY + 20;
-
+    // --- פונקציות עזר ---
+    const findTargetBox = useCallback((x, y, currentNodes) => {
         return currentNodes.find(n => 
             n.type === 'specialtyBox' &&
-            centerX >= n.position.x && centerX <= n.position.x + BOX_WIDTH &&
-            centerY >= n.position.y && centerY <= n.position.y + BOX_HEIGHT
+            x >= n.position.x && x <= n.position.x + BOX_WIDTH &&
+            y >= n.position.y && y <= n.position.y + BOX_HEIGHT
         );
     }, []);
 
-    // --- גרירה (Highlight) ---
-    const onNodeDrag = useCallback((event, node) => {
-        setNodes((nds) => {
-            const targetBox = findTargetBox(node, nds);
-            
-            // בדיקה אם גוררים שמאלה לאזור הניתוק
-            let absX = node.position.x;
-            if (node.parentNode) {
-                 const parent = nds.find(n => n.id === node.parentNode);
-                 if (parent) absX += parent.position.x;
-            }
-            setSidebarHighlighted(absX < SIDEBAR_WIDTH);
+    // --- אירועי Drag & Drop מהבנק למשטח ---
+    
+    const onDragOver = useCallback((event) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+    }, []);
 
-            const targetId = targetBox ? targetBox.id : null;
+    const onDrop = useCallback((event) => {
+        event.preventDefault();
+
+        // קריאת הנתונים מהבנק
+        const symptomDataStr = event.dataTransfer.getData('application/reactflow');
+        if (!symptomDataStr) return;
+        
+        const symptom = JSON.parse(symptomDataStr);
+
+        // חישוב המיקום במשטח
+        const reactFlowBounds = reactFlowWrapper.current.getBoundingClientRect();
+        const position = project({
+            x: event.clientX - reactFlowBounds.left,
+            y: event.clientY - reactFlowBounds.top,
+        });
+
+        // בדיקה אם נפלנו על קופסה
+        // שים לב: בשלב זה אין לנו את ה-nodes המעודכנים בתוך ה-callback בצורה ישירה,
+        // אז נשתמש ב-setNodes עם פונקציה כדי לקבל את המצב העדכני
+        setNodes((nds) => {
+            const targetBox = findTargetBox(position.x, position.y, nds);
             
+            // יצירת הצומת החדש
+            const newNode = {
+                id: `new-${symptom.id}-${Date.now()}`,
+                type: 'symptomPill',
+                data: { label: symptom.name, id: symptom.id },
+                position: position, // מיקום זמני
+                zIndex: 1000
+            };
+
+            if (targetBox) {
+                // אם נפלנו על קופסה, נחשב מיקום יחסי ונהפוך לילד שלה
+                newNode.parentNode = targetBox.id;
+                newNode.position = {
+                    x: position.x - targetBox.position.x,
+                    y: position.y - targetBox.position.y
+                };
+            }
+
+            return nds.concat(newNode);
+        });
+
+    }, [project, findTargetBox, setNodes]);
+
+    // --- גרירה בתוך המשטח (סידור מחדש) ---
+    const onNodeDrag = useCallback((event, node) => {
+        // כאן אפשר להוסיף Highlight לקופסאות כמו קודם
+        setNodes(nds => {
+            let absX = node.position.x;
+            let absY = node.position.y;
+            if (node.parentNode) {
+                 const p = nds.find(n => n.id === node.parentNode);
+                 if (p) { absX += p.position.x; absY += p.position.y; }
+            }
+            const targetBox = findTargetBox(absX + 50, absY + 20, nds);
+            const targetId = targetBox ? targetBox.id : null;
+
+            const needsUpdate = nds.some(n => n.type === 'specialtyBox' && ((n.id === targetId && !n.data.isHighlighted) || (n.id !== targetId && n.data.isHighlighted)));
+            if (!needsUpdate) return nds;
+
             return nds.map(n => {
-                if (n.type === 'specialtyBox') {
-                    const shouldHighlight = n.id === targetId;
-                    if (n.data.isHighlighted !== shouldHighlight) {
-                        return { ...n, data: { ...n.data, isHighlighted: shouldHighlight } };
-                    }
-                }
+                if (n.type === 'specialtyBox') return { ...n, data: { ...n.data, isHighlighted: n.id === targetId } };
                 return n;
             });
         });
     }, [findTargetBox, setNodes]);
 
-    // --- סיום גרירה (Drop) ---
     const onNodeDragStop = useCallback((event, node) => {
-        setSidebarHighlighted(false);
-
         setNodes((nds) => {
-            // ניקוי הדגשות
             const cleanNodes = nds.map(n => n.type === 'specialtyBox' ? { ...n, data: { ...n.data, isHighlighted: false } } : n);
             
-            const targetBox = findTargetBox(node, cleanNodes);
+            // חישוב מיקום אבסולוטי נוכחי
+            let absX = node.position.x;
+            let absY = node.position.y;
+            const oldParent = cleanNodes.find(p => p.id === node.parentNode);
+            if (oldParent) { absX += oldParent.position.x; absY += oldParent.position.y; }
+
+            const targetBox = findTargetBox(absX + 50, absY + 20, cleanNodes);
 
             return cleanNodes.map((n) => {
                 if (n.id === node.id) {
-                    // חישוב מיקום אבסולוטי נוכחי
-                    let currentAbsX = node.position.x;
-                    let currentAbsY = node.position.y;
-                    
-                    // אם היה לו הורה קודם, המיקום היה יחסי. נמיר לאבסולוטי.
-                    const oldParent = cleanNodes.find(p => p.id === node.parentNode);
-                    if (oldParent) {
-                        currentAbsX += oldParent.position.x;
-                        currentAbsY += oldParent.position.y;
-                    }
-
-                    // 1. שיוך לקופסה חדשה
+                    // אם גררנו לקופסה (אפילו אחרת)
                     if (targetBox) {
-                        // המרה לקואורדינטות יחסיות של הקופסה החדשה
-                        const relX = currentAbsX - targetBox.position.x;
-                        const relY = currentAbsY - targetBox.position.y;
-                        
-                        return { 
-                            ...n, 
-                            parentNode: targetBox.id, 
-                            extent: undefined, // הסרה של extent מאפשרת להוציא אותו שוב בקלות
-                            position: { x: Math.max(10, relX), y: Math.max(40, relY) } 
-                        };
-                    } 
-                    
-                    // 2. שחרור (ניתוק) - אם לא נפל על אף קופסה
-                    // נחזיר אותו למיקום האבסולוטי שלו כדי שייראה כאילו נחת איפה שעזבנו אותו
-                    // או נזרוק אותו לצד שמאל אם הוא ממש רחוק
-                    let newPos = { x: currentAbsX, y: currentAbsY };
-                    
-                    // אם הוא "ברח" לצד שמאל, נסדר אותו יפה
-                    if (currentAbsX < SIDEBAR_WIDTH) {
-                        newPos.x = 30;
+                        const relX = absX - targetBox.position.x;
+                        const relY = absY - targetBox.position.y;
+                        return { ...n, parentNode: targetBox.id, position: { x: relX, y: relY } };
                     }
-
-                    return { 
-                        ...n, 
-                        parentNode: undefined, 
-                        extent: undefined, 
-                        position: newPos 
-                    };
+                    // אם גררנו לשטח ריק -> להפוך לעצמאי (Unassigned)
+                    return { ...n, parentNode: undefined, position: { x: absX, y: absY } };
                 }
                 return n;
             });
         });
     }, [findTargetBox, setNodes]);
 
-    // --- ניהול (קליק ימני) ---
+    // --- ניהול (קליק ימני - מחיקה בלבד) ---
     const onNodeContextMenu = useCallback((event, node) => {
-        event.preventDefault(); // מונע תפריט דפדפן
-        // שימוש ב-fixed position מחייב clientX/Y
-        setContextMenu({ 
-            id: node.id, 
-            type: node.type, 
-            top: event.clientY, 
-            left: event.clientX 
-        });
+        event.preventDefault();
+        setContextMenu({ id: node.id, type: node.type, top: event.clientY, left: event.clientX });
     }, []);
 
     const onPaneClick = useCallback(() => setContextMenu(null), []);
@@ -264,25 +297,7 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
         setContextMenu(null);
     };
 
-    const handleDuplicate = (nodeId) => {
-        setContextMenu(null);
-        const nodeToClone = nodes.find(n => n.id === nodeId);
-        if (!nodeToClone) return;
-        
-        // אם הפתקית בתוך קופסה, צריך לוודא שהחדשה תקבל את אותם תנאים
-        const newId = `clone-${Date.now()}`;
-        const newPos = { x: nodeToClone.position.x + 20, y: nodeToClone.position.y + 20 };
-        
-        setNodes(nds => nds.concat({
-            ...nodeToClone,
-            id: newId,
-            position: newPos,
-            // שומרים על ה-parentNode כדי שייווצר בתוך אותה קופסה
-            parentNode: nodeToClone.parentNode, 
-            data: { ...nodeToClone.data, label: `${nodeToClone.data.label} (עותק)` }
-        }));
-    };
-
+    // שמירה
     const handleSave = async () => {
         const mappings = nodes
             .filter(n => n.type === 'symptomPill' && n.parentNode) 
@@ -304,51 +319,51 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
     if (loading) return <LoadingSpinner />;
 
     return (
-        <div className="bg-white p-6 rounded-lg shadow h-full flex flex-col relative">
-            <div className="flex justify-between items-center mb-4 border-b pb-3">
-                <h3 className="text-2xl font-bold text-text-dark">מפת האבחון (V8)</h3>
+        <div className="bg-white rounded-lg shadow h-full flex flex-col overflow-hidden" style={{ height: '85vh' }}>
+            {/* כותרת */}
+            <div className="flex justify-between items-center p-4 border-b bg-white z-10">
+                <h3 className="text-2xl font-bold text-text-dark">מפת האבחון (שיטת הבנק)</h3>
                 <button onClick={handleSave} className="px-6 py-2 bg-blue-600 text-white rounded-full font-bold hover:bg-blue-700 shadow-md">
                     💾 שמור שינויים
                 </button>
             </div>
             
-            <div style={{ flexGrow: 1, height: '700px', border: '1px solid #e2e8f0', borderRadius: '16px', background: '#f8fafc', position: 'relative' }}>
-                <ReactFlow
-                    nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
-                    onNodeDrag={onNodeDrag} onNodeDragStop={onNodeDragStop}
-                    onNodeContextMenu={onNodeContextMenu} onPaneClick={onPaneClick}
-                    nodeTypes={nodeTypes} fitView
-                >
-                    <Background color="#cbd5e1" gap={25} />
-                    <Controls />
-                    
-                    <div 
-                        style={{
-                            position: 'absolute', left: 0, top: 0, bottom: 0, width: `${SIDEBAR_WIDTH}px`,
-                            background: isSidebarHighlighted ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
-                            borderRight: '2px dashed #cbd5e1', pointerEvents: 'none', zIndex: 0,
-                            display: 'flex', justifyContent: 'center', paddingTop: '20px'
-                        }}
+            {/* אזור העבודה - Flex Row */}
+            <div className="flex flex-grow relative" style={{ height: '100%' }}>
+                
+                {/* אזור המשטח (Canvas) - משמאל */}
+                <div className="flex-grow relative h-full" ref={reactFlowWrapper}>
+                    <ReactFlow
+                        nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
+                        onNodeDrag={onNodeDrag} onNodeDragStop={onNodeDragStop}
+                        onNodeContextMenu={onNodeContextMenu} onPaneClick={onPaneClick}
+                        onDragOver={onDragOver} onDrop={onDrop} // אירועי HTML5 DnD
+                        nodeTypes={nodeTypes} fitView
                     >
-                        {isSidebarHighlighted && <span style={{ color: '#059669', fontWeight: 'bold', background:'white', padding:'4px 10px', borderRadius:'20px', height:'fit-content' }}>שחרר לניתוק 🔓</span>}
-                    </div>
-                </ReactFlow>
+                        <Background color="#cbd5e1" gap={25} />
+                        <Controls position="top-left" />
+                        <Panel position="top-right" className="bg-white/80 p-2 rounded border text-xs text-gray-500">
+                            גרור סימפטומים מהרשימה מימין לתוך הקופסאות
+                        </Panel>
+                    </ReactFlow>
 
-                {/* שימוש ב-fixed position כדי שהתפריט יופיע בדיוק במקום הנכון */}
-                {contextMenu && (
-                    <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 9999, pointerEvents: 'none' }}>
-                         {/* אנו מעבירים את הקואורדינטות ישירות לתוך הקומפוננטה או עוטפים אותה */}
-                         <div style={{ position: 'absolute', top: contextMenu.top, left: contextMenu.left, pointerEvents: 'auto' }}>
-                            <ContextMenu 
-                                {...contextMenu} 
-                                onClose={onPaneClick} 
-                                onDelete={handleDelete} 
-                                onDuplicate={handleDuplicate}
-                                top={0} left={0} // כבר מיקמנו את הדיב העוטף
-                            />
-                         </div>
-                    </div>
-                )}
+                    {contextMenu && (
+                        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 9999, pointerEvents: 'none' }}>
+                            <div style={{ position: 'absolute', top: contextMenu.top, left: contextMenu.left, pointerEvents: 'auto' }}>
+                                <ContextMenu 
+                                    {...contextMenu} 
+                                    onClose={onPaneClick} 
+                                    onDelete={handleDelete} 
+                                    // אין צורך בכפתור שכפול בתפריט כי גוררים מהבנק
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* אזור הבנק (Sidebar) - מימין */}
+                <Sidebar symptoms={allSymptoms} />
+                
             </div>
         </div>
     );
