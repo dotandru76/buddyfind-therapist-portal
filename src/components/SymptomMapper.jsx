@@ -1,4 +1,4 @@
-// src/components/SymptomMapper.jsx - V7.0 (Full Features: Drag, Drop, Unassign, ContextMenu)
+// src/components/SymptomMapper.jsx - V8.0 (Free Drag & Fixed Menu)
 import React, { useState, useEffect, useCallback } from 'react';
 import ReactFlow, {
   ReactFlowProvider,
@@ -11,14 +11,14 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import LoadingSpinner from './LoadingSpinner';
-import ContextMenu from './ContextMenu'; // וודא שהקובץ הזה קיים בתיקיית components
+import ContextMenu from './ContextMenu';
 
+// מידות קבועות
 const BOX_WIDTH = 280;
 const BOX_HEIGHT = 280;
-const SIDEBAR_WIDTH = 320; // רוחב אזור ה"בנק" בצד שמאל
+const SIDEBAR_WIDTH = 320;
 
 // --- 1. רכיבי צמתים ---
-
 const SpecialtyBoxNode = ({ data }) => {
     const isHighlighted = data.isHighlighted;
     return (
@@ -41,11 +41,6 @@ const SpecialtyBoxNode = ({ data }) => {
             }}>
                 {data.label}
             </div>
-            {isHighlighted && (
-                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563EB', fontWeight: 'bold', opacity: 0.5 }}>
-                    שחרר לשיוך 🎯
-                </div>
-            )}
         </div>
     );
 };
@@ -69,8 +64,8 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]); 
     const [loading, setLoading] = useState(true);
-    const [contextMenu, setContextMenu] = useState(null); // תפריט קליק ימנית
-    const [isSidebarHighlighted, setSidebarHighlighted] = useState(false); // להארת אזור השחרור
+    const [contextMenu, setContextMenu] = useState(null);
+    const [isSidebarHighlighted, setSidebarHighlighted] = useState(false);
 
     // טעינת נתונים
     useEffect(() => {
@@ -110,11 +105,9 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
                     
                     let position = { x: 0, y: 0 }; 
                     let parentNode = undefined;
-                    let extent = undefined;
 
                     if (isAssigned) {
                         parentNode = `spec-${mapping.specialty_id}`;
-                        extent = 'parent';
                         position = { x: 20 + (index % 2) * 120, y: 50 + Math.floor((index % 10) / 2) * 40 };
                     } else {
                         position = { x: 30, y: 80 + unassignedY * 50 };
@@ -127,7 +120,7 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
                         data: { label: sym.name, id: sym.id },
                         position: position,
                         parentNode: parentNode,
-                        extent: extent,
+                        // הוסר extent: 'parent' כדי לאפשר הוצאה
                         draggable: true,
                         zIndex: 100
                     });
@@ -139,15 +132,24 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
         fetchData();
     }, [API_URL, onLogout, setNodes]);
 
-    // --- פונקציות חישוב ---
+    // --- זיהוי חפיפה ---
+    // משתמשים ב-getBoundingClientRect כדי להיות מדויקים עם מה שהמשתמש רואה
+    // אבל בגלל שזה מסובך בתוך קנבס, נשתמש בחישוב מתמטי לפי קואורדינטות
     const findTargetBox = useCallback((node, currentNodes) => {
+        // חישוב המיקום האבסולוטי של הפתקית
         let absX = node.position.x;
         let absY = node.position.y;
+
+        // אם הפתקית היא כרגע "ילד", המיקום שלה יחסי. נוסיף את מיקום ההורה.
         if (node.parentNode) {
             const parent = currentNodes.find(n => n.id === node.parentNode);
-            if (parent) { absX += parent.position.x; absY += parent.position.y; }
+            if (parent) {
+                absX += parent.position.x;
+                absY += parent.position.y;
+            }
         }
-        const centerX = absX + 50; 
+
+        const centerX = absX + 50; // מרכז משוער
         const centerY = absY + 20;
 
         return currentNodes.find(n => 
@@ -157,74 +159,102 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
         );
     }, []);
 
-    const isOverSidebar = useCallback((node, currentNodes) => {
-        let absX = node.position.x;
-        if (node.parentNode) {
-            const parent = currentNodes.find(n => n.id === node.parentNode);
-            if (parent) absX += parent.position.x;
-        }
-        return absX < SIDEBAR_WIDTH;
-    }, []);
-
     // --- גרירה (Highlight) ---
     const onNodeDrag = useCallback((event, node) => {
         setNodes((nds) => {
             const targetBox = findTargetBox(node, nds);
-            const overSidebar = isOverSidebar(node, nds);
             
-            setSidebarHighlighted(overSidebar); // עדכון ויזואלי ל"בנק"
+            // בדיקה אם גוררים שמאלה לאזור הניתוק
+            let absX = node.position.x;
+            if (node.parentNode) {
+                 const parent = nds.find(n => n.id === node.parentNode);
+                 if (parent) absX += parent.position.x;
+            }
+            setSidebarHighlighted(absX < SIDEBAR_WIDTH);
 
             const targetId = targetBox ? targetBox.id : null;
-            const needsUpdate = nds.some(n => n.type === 'specialtyBox' && ((n.id === targetId && !n.data.isHighlighted) || (n.id !== targetId && n.data.isHighlighted)));
-
-            if (!needsUpdate) return nds;
+            
             return nds.map(n => {
-                if (n.type === 'specialtyBox') return { ...n, data: { ...n.data, isHighlighted: n.id === targetId } };
-                return n;
-            });
-        });
-    }, [findTargetBox, isOverSidebar, setNodes]);
-
-    // --- סיום גרירה (Drop) ---
-    const onNodeDragStop = useCallback((event, node) => {
-        setSidebarHighlighted(false); // כיבוי אורות
-
-        setNodes((nds) => {
-            const cleanNodes = nds.map(n => n.type === 'specialtyBox' ? { ...n, data: { ...n.data, isHighlighted: false } } : n);
-            const targetBox = findTargetBox(node, cleanNodes);
-            const overSidebar = isOverSidebar(node, cleanNodes);
-
-            return cleanNodes.map((n) => {
-                if (n.id === node.id) {
-                    let absX = node.position.x;
-                    let absY = node.position.y;
-                    const oldParent = cleanNodes.find(p => p.id === node.parentNode);
-                    if (oldParent) { absX += oldParent.position.x; absY += oldParent.position.y; }
-
-                    // 1. שיוך לקופסה
-                    if (targetBox) {
-                        const relX = absX - targetBox.position.x;
-                        const relY = absY - targetBox.position.y;
-                        return { ...n, parentNode: targetBox.id, extent: 'parent', position: { x: Math.max(10, relX), y: Math.max(40, relY) } };
-                    } 
-                    
-                    // 2. שחרור ל"בנק" (ניתוק)
-                    if (overSidebar) {
-                        return { ...n, parentNode: undefined, extent: undefined, position: { x: 30, y: absY } };
+                if (n.type === 'specialtyBox') {
+                    const shouldHighlight = n.id === targetId;
+                    if (n.data.isHighlighted !== shouldHighlight) {
+                        return { ...n, data: { ...n.data, isHighlighted: shouldHighlight } };
                     }
-
-                    // 3. זריקה לשטח מת - נחזיר למקום האחרון או ל"בנק" כברירת מחדל
-                    return { ...n, parentNode: undefined, extent: undefined, position: { x: 30, y: absY } };
                 }
                 return n;
             });
         });
-    }, [findTargetBox, isOverSidebar, setNodes]);
+    }, [findTargetBox, setNodes]);
+
+    // --- סיום גרירה (Drop) ---
+    const onNodeDragStop = useCallback((event, node) => {
+        setSidebarHighlighted(false);
+
+        setNodes((nds) => {
+            // ניקוי הדגשות
+            const cleanNodes = nds.map(n => n.type === 'specialtyBox' ? { ...n, data: { ...n.data, isHighlighted: false } } : n);
+            
+            const targetBox = findTargetBox(node, cleanNodes);
+
+            return cleanNodes.map((n) => {
+                if (n.id === node.id) {
+                    // חישוב מיקום אבסולוטי נוכחי
+                    let currentAbsX = node.position.x;
+                    let currentAbsY = node.position.y;
+                    
+                    // אם היה לו הורה קודם, המיקום היה יחסי. נמיר לאבסולוטי.
+                    const oldParent = cleanNodes.find(p => p.id === node.parentNode);
+                    if (oldParent) {
+                        currentAbsX += oldParent.position.x;
+                        currentAbsY += oldParent.position.y;
+                    }
+
+                    // 1. שיוך לקופסה חדשה
+                    if (targetBox) {
+                        // המרה לקואורדינטות יחסיות של הקופסה החדשה
+                        const relX = currentAbsX - targetBox.position.x;
+                        const relY = currentAbsY - targetBox.position.y;
+                        
+                        return { 
+                            ...n, 
+                            parentNode: targetBox.id, 
+                            extent: undefined, // הסרה של extent מאפשרת להוציא אותו שוב בקלות
+                            position: { x: Math.max(10, relX), y: Math.max(40, relY) } 
+                        };
+                    } 
+                    
+                    // 2. שחרור (ניתוק) - אם לא נפל על אף קופסה
+                    // נחזיר אותו למיקום האבסולוטי שלו כדי שייראה כאילו נחת איפה שעזבנו אותו
+                    // או נזרוק אותו לצד שמאל אם הוא ממש רחוק
+                    let newPos = { x: currentAbsX, y: currentAbsY };
+                    
+                    // אם הוא "ברח" לצד שמאל, נסדר אותו יפה
+                    if (currentAbsX < SIDEBAR_WIDTH) {
+                        newPos.x = 30;
+                    }
+
+                    return { 
+                        ...n, 
+                        parentNode: undefined, 
+                        extent: undefined, 
+                        position: newPos 
+                    };
+                }
+                return n;
+            });
+        });
+    }, [findTargetBox, setNodes]);
 
     // --- ניהול (קליק ימני) ---
     const onNodeContextMenu = useCallback((event, node) => {
-        event.preventDefault();
-        setContextMenu({ id: node.id, type: node.type, top: event.clientY, left: event.clientX });
+        event.preventDefault(); // מונע תפריט דפדפן
+        // שימוש ב-fixed position מחייב clientX/Y
+        setContextMenu({ 
+            id: node.id, 
+            type: node.type, 
+            top: event.clientY, 
+            left: event.clientX 
+        });
     }, []);
 
     const onPaneClick = useCallback(() => setContextMenu(null), []);
@@ -238,19 +268,21 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
         setContextMenu(null);
         const nodeToClone = nodes.find(n => n.id === nodeId);
         if (!nodeToClone) return;
+        
+        // אם הפתקית בתוך קופסה, צריך לוודא שהחדשה תקבל את אותם תנאים
         const newId = `clone-${Date.now()}`;
-        // מיקום מעט מוזז
         const newPos = { x: nodeToClone.position.x + 20, y: nodeToClone.position.y + 20 };
         
         setNodes(nds => nds.concat({
             ...nodeToClone,
             id: newId,
             position: newPos,
+            // שומרים על ה-parentNode כדי שייווצר בתוך אותה קופסה
+            parentNode: nodeToClone.parentNode, 
             data: { ...nodeToClone.data, label: `${nodeToClone.data.label} (עותק)` }
         }));
     };
 
-    // שמירה
     const handleSave = async () => {
         const mappings = nodes
             .filter(n => n.type === 'symptomPill' && n.parentNode) 
@@ -274,16 +306,10 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
     return (
         <div className="bg-white p-6 rounded-lg shadow h-full flex flex-col relative">
             <div className="flex justify-between items-center mb-4 border-b pb-3">
-                <h3 className="text-2xl font-bold text-text-dark">מפת האבחון</h3>
-                <div className="flex gap-2">
-                     <div className="text-xs text-gray-500 flex flex-col justify-center text-right px-2">
-                        <span>קליק ימני למחיקה/שכפול</span>
-                        <span>גרירה שמאלה לניתוק</span>
-                     </div>
-                    <button onClick={handleSave} className="px-6 py-2 bg-blue-600 text-white rounded-full font-bold hover:bg-blue-700 shadow-md">
-                        💾 שמור שינויים
-                    </button>
-                </div>
+                <h3 className="text-2xl font-bold text-text-dark">מפת האבחון (V8)</h3>
+                <button onClick={handleSave} className="px-6 py-2 bg-blue-600 text-white rounded-full font-bold hover:bg-blue-700 shadow-md">
+                    💾 שמור שינויים
+                </button>
             </div>
             
             <div style={{ flexGrow: 1, height: '700px', border: '1px solid #e2e8f0', borderRadius: '16px', background: '#f8fafc', position: 'relative' }}>
@@ -296,27 +322,32 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
                     <Background color="#cbd5e1" gap={25} />
                     <Controls />
                     
-                    {/* אזור ה"בנק" השמאלי - מואר בזמן גרירה */}
                     <div 
                         style={{
                             position: 'absolute', left: 0, top: 0, bottom: 0, width: `${SIDEBAR_WIDTH}px`,
                             background: isSidebarHighlighted ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
-                            borderRight: '2px dashed #cbd5e1', pointerEvents: 'none',
-                            transition: 'background 0.2s', zIndex: 0,
+                            borderRight: '2px dashed #cbd5e1', pointerEvents: 'none', zIndex: 0,
                             display: 'flex', justifyContent: 'center', paddingTop: '20px'
                         }}
                     >
-                        {isSidebarHighlighted && <span style={{ color: '#059669', fontWeight: 'bold', background:'white', padding:'4px 10px', borderRadius:'20px', height:'fit-content' }}>שחרר כאן לניתוק 🔓</span>}
+                        {isSidebarHighlighted && <span style={{ color: '#059669', fontWeight: 'bold', background:'white', padding:'4px 10px', borderRadius:'20px', height:'fit-content' }}>שחרר לניתוק 🔓</span>}
                     </div>
                 </ReactFlow>
 
+                {/* שימוש ב-fixed position כדי שהתפריט יופיע בדיוק במקום הנכון */}
                 {contextMenu && (
-                    <ContextMenu 
-                        {...contextMenu} 
-                        onClose={onPaneClick} 
-                        onDelete={handleDelete} 
-                        onDuplicate={handleDuplicate}
-                    />
+                    <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 9999, pointerEvents: 'none' }}>
+                         {/* אנו מעבירים את הקואורדינטות ישירות לתוך הקומפוננטה או עוטפים אותה */}
+                         <div style={{ position: 'absolute', top: contextMenu.top, left: contextMenu.left, pointerEvents: 'auto' }}>
+                            <ContextMenu 
+                                {...contextMenu} 
+                                onClose={onPaneClick} 
+                                onDelete={handleDelete} 
+                                onDuplicate={handleDuplicate}
+                                top={0} left={0} // כבר מיקמנו את הדיב העוטף
+                            />
+                         </div>
+                    </div>
                 )}
             </div>
         </div>
