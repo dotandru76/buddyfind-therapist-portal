@@ -1,4 +1,4 @@
-// src/components/ProfessionManager.jsx - V7.0 (Full: Shared Specialties + Edit + Delete)
+// src/components/ProfessionManager.jsx - V7.1 (Allow Delete Profession)
 import React, { useState, useEffect, useCallback } from 'react';
 import LoadingSpinner from './LoadingSpinner';
 import AlertMessage from './AlertMessage';
@@ -23,27 +23,23 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
     const [error, setError] = useState(null);
     const [message, setMessage] = useState(null);
     
-    // --- מצב יצירה ---
     const [newItemName, setNewItemName] = useState('');
     const [selectedParentId, setSelectedParentId] = useState('');
-    const [parentType, setParentType] = useState('profession'); // 'profession' או 'category'
+    const [parentType, setParentType] = useState('profession'); 
     const [saving, setSaving] = useState(false);
 
-    // --- מצב עריכה ---
     const [editingItem, setEditingItem] = useState(null);
     const [editNameVal, setEditNameVal] = useState('');
 
-    // 1. טעינת נתונים
     const fetchData = useCallback(async () => {
         setLoading(true); setError(null);
         try {
             const res = await fetch(`${API_URL}/api/admin/data/all-definitions`, { credentials: 'include' });
             if (res.status === 401 || res.status === 403) { onLogout(); return; }
-            if (!res.ok) throw new Error('שגיאה בטעינת הנתונים');
+            if (!res.ok) throw new Error('שגיאה בטעינת נתונים');
             const result = await res.json();
             setData(result);
             
-            // איפוס בחירה ברירת מחדל
             if (activeTab === 'professions' && result.mainCategories.length > 0) {
                 setSelectedParentId(result.mainCategories[0].id);
             } else if (result.professions.length > 0) {
@@ -56,7 +52,6 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
 
     useEffect(() => { fetchData(); }, [fetchData]);
 
-    // 2. יצירת פריט חדש
     const handleCreate = async (e) => {
         e.preventDefault();
         if (!newItemName.trim() || !selectedParentId) return;
@@ -67,13 +62,12 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
             body = { name: newItemName, main_category_id: selectedParentId };
         } else if (activeTab === 'specialties') {
             endpoint = '/api/admin/specialties';
-            // לוגיקה חכמה: האם זה שייך לקטגוריה או למקצוע?
             if (parentType === 'category') {
                 body = { name: newItemName, main_category_id: selectedParentId, profession_id: null };
             } else {
                 body = { name: newItemName, profession_id: selectedParentId, main_category_id: null };
             }
-        } else { // symptoms
+        } else { 
             endpoint = '/api/admin/symptoms';
             body = { name: newItemName, profession_id: selectedParentId };
         }
@@ -92,31 +86,37 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
         finally { setSaving(false); }
     };
 
-    // 3. מחיקה
-    const handleDelete = async (id, type) => {
-        if (!window.confirm('האם אתה בטוח? פעולה זו תמחק גם מיפויים קיימים.')) return;
+    const handleDelete = async (id) => {
+        if (!window.confirm('האם אתה בטוח? אם יש פריטים שקשורים לזה, המחיקה עלולה להיכשל.')) return;
         
-        const endpoint = type === 'specialties' ? `/api/admin/specialties/${id}` : 
-                         type === 'symptoms' ? `/api/admin/symptoms/${id}` : null;
-                         
+        // קביעת הנתיב לפי הטאב הפעיל
+        let endpoint = '';
+        if (activeTab === 'professions') endpoint = `/api/admin/professions/${id}`;
+        else if (activeTab === 'specialties') endpoint = `/api/admin/specialties/${id}`;
+        else if (activeTab === 'symptoms') endpoint = `/api/admin/symptoms/${id}`;
+
         try {
             const res = await fetch(`${API_URL}${endpoint}`, { method: 'DELETE', credentials: 'include' });
-            if (!res.ok) throw new Error('שגיאה במחיקה');
+            const data = await res.json();
+            
+            if (!res.ok) {
+                // טיפול בשגיאת Foreign Key (אם יש מטפלים שמשויכים למקצוע)
+                if (data.error && data.error.includes('foreign key constraint')) {
+                    throw new Error('לא ניתן למחוק: ישנם מטפלים, התמחויות או סימפטומים שמשויכים לפריט זה.');
+                }
+                throw new Error(data.error || 'שגיאה במחיקה');
+            }
+            
+            setMessage('נמחק בהצלחה!');
             fetchData();
-        } catch (err) { alert(err.message); }
+        } catch (err) { 
+            alert(err.message); 
+        }
     };
 
-    // 4. עריכת שם
-    const startEdit = (item) => {
-        setEditingItem(item.id);
-        setEditNameVal(item.name);
-    };
-
-    const cancelEdit = () => {
-        setEditingItem(null);
-        setEditNameVal('');
-    };
-
+    const startEdit = (item) => { setEditingItem(item.id); setEditNameVal(item.name); };
+    const cancelEdit = () => { setEditingItem(null); setEditNameVal(''); };
+    
     const saveEdit = async (id) => {
         if (!editNameVal.trim()) return;
         setSaving(true);
@@ -129,70 +129,43 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
             setMessage('עודכן בהצלחה!');
             setEditingItem(null);
             fetchData();
-        } catch (err) { alert('שגיאה: ' + err.message); } finally { setSaving(false); }
+        } catch (err) { alert(err.message); } finally { setSaving(false); }
     };
 
-    // --- עזרי תצוגה ולוגיקה ---
-
-    // בניית אפשרויות ה-Dropdown
     const renderParentOptions = () => {
         if (activeTab === 'professions') {
             return data.mainCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>);
         }
-        
         if (activeTab === 'specialties') {
             return (
                 <>
-                    <optgroup label="--- קטגוריות כלליות (משותף) ---">
-                        {data.mainCategories.map(c => (
-                            <option key={`cat-${c.id}`} value={`cat-${c.id}`}>{c.name} (כללי)</option>
-                        ))}
+                    <optgroup label="--- קטגוריות כלליות ---">
+                        {data.mainCategories.map(c => <option key={`cat-${c.id}`} value={`cat-${c.id}`}>{c.name} (כללי)</option>)}
                     </optgroup>
                     <optgroup label="--- מקצועות ספציפיים ---">
-                        {data.professions.map(p => (
-                            <option key={`prof-${p.id}`} value={`prof-${p.id}`}>{p.name}</option>
-                        ))}
+                        {data.professions.map(p => <option key={`prof-${p.id}`} value={`prof-${p.id}`}>{p.name}</option>)}
                     </optgroup>
                 </>
             );
         }
-
-        // Default (Symptoms)
         return data.professions.map(p => <option key={p.id} value={p.id}>{p.name}</option>);
     };
 
-    // טיפול בבחירה ב-Dropdown
     const handleSelectChange = (e) => {
         const val = e.target.value;
         if (activeTab === 'specialties') {
-            if (val.startsWith('cat-')) {
-                setParentType('category');
-                setSelectedParentId(val.replace('cat-', ''));
-            } else {
-                setParentType('profession');
-                setSelectedParentId(val.replace('prof-', ''));
-            }
-        } else {
-            setSelectedParentId(val);
-        }
+            if (val.startsWith('cat-')) { setParentType('category'); setSelectedParentId(val.replace('cat-', '')); } 
+            else { setParentType('profession'); setSelectedParentId(val.replace('prof-', '')); }
+        } else { setSelectedParentId(val); }
     };
 
-    // הצגת שם ההורה בטבלה
     const getParentName = (item) => {
-        if (activeTab === 'professions') {
-            return data.mainCategories.find(c => c.id === item.main_category_id)?.name || '-';
-        }
+        if (activeTab === 'professions') return data.mainCategories.find(c => c.id === item.main_category_id)?.name || '-';
         if (activeTab === 'specialties') {
-            if (item.main_category_id) {
-                const cat = data.mainCategories.find(c => c.id === item.main_category_id);
-                return cat ? `🔵 ${cat.name} (כללי)` : 'כללי';
-            }
-            const prof = data.professions.find(p => p.id === item.profession_id);
-            return prof ? prof.name : '-';
+            if (item.main_category_id) return data.mainCategories.find(c => c.id === item.main_category_id)?.name + ' (כללי)' || 'כללי';
+            return data.professions.find(p => p.id === item.profession_id)?.name || '-';
         }
-        // Symptoms
-        const prof = data.professions.find(p => p.id === item.profession_id);
-        return prof ? prof.name : '-';
+        return data.professions.find(p => p.id === item.profession_id)?.name || '-';
     };
 
     const getFilteredList = () => {
@@ -208,13 +181,9 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <h3 className="text-2xl font-bold text-text-dark">ניהול נתונים (CMS)</h3>
-            </div>
-            
+            <div className="flex justify-between items-center"><h3 className="text-2xl font-bold text-text-dark">ניהול נתונים (CMS)</h3></div>
             {message && <AlertMessage type="success" message={message} onDismiss={() => setMessage(null)} />}
-            {error && <AlertMessage type="error" message={error} onDismiss={() => setError(null)} />}
-
+            
             <div className="flex border-b border-gray-200 bg-white rounded-t-lg overflow-hidden">
                 <TabButton text="מקצועות" isActive={activeTab === 'professions'} onClick={() => {setActiveTab('professions'); setEditingItem(null);}} />
                 <TabButton text="התמחויות" isActive={activeTab === 'specialties'} onClick={() => {setActiveTab('specialties'); setEditingItem(null);}} />
@@ -227,14 +196,8 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            {activeTab === 'specialties' ? 'שייך ל- (כללי או ספציפי)' : 'שייך ל-'}
-                        </label>
-                        <select 
-                            onChange={handleSelectChange} 
-                            className="block w-full px-3 py-2 border border-gray-300 rounded-md bg-white"
-                            defaultValue=""
-                        >
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{activeTab === 'specialties' ? 'שייך ל- (כללי או ספציפי)' : 'שייך ל-'}</label>
+                        <select onChange={handleSelectChange} className="block w-full px-3 py-2 border border-gray-300 rounded-md bg-white" defaultValue="">
                             <option value="" disabled>-- בחר --</option>
                             {renderParentOptions()}
                         </select>
@@ -264,11 +227,7 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
                             {list.map(item => (
                                 <tr key={item.id} className="hover:bg-gray-50">
                                     <td className="px-4 py-3 font-mono text-gray-400">#{item.id}</td>
-                                    <td className="px-4 py-3 font-medium text-gray-900">
-                                        {editingItem === item.id ? (
-                                            <input type="text" value={editNameVal} onChange={(e) => setEditNameVal(e.target.value)} className="border border-blue-400 rounded px-2 py-1 w-full" autoFocus />
-                                        ) : item.name}
-                                    </td>
+                                    <td className="px-4 py-3 font-medium text-gray-900">{editingItem === item.id ? <input type="text" value={editNameVal} onChange={(e) => setEditNameVal(e.target.value)} className="border border-blue-400 rounded px-2 py-1 w-full" autoFocus /> : item.name}</td>
                                     <td className="px-4 py-3 text-gray-600">{getParentName(item)}</td>
                                     <td className="px-4 py-3 flex gap-2">
                                         {editingItem === item.id ? (
@@ -276,7 +235,8 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
                                         ) : (
                                             <> 
                                                 <button onClick={() => startEdit(item)} className="text-blue-600 text-lg">✎</button>
-                                                {activeTab !== 'professions' && <button onClick={() => handleDelete(item.id, activeTab)} className="text-red-500 text-lg">🗑️</button>}
+                                                {/* --- התיקון: כפתור המחיקה מופיע לכולם --- */}
+                                                <button onClick={() => handleDelete(item.id)} className="text-red-500 text-lg">🗑️</button>
                                             </>
                                         )}
                                     </td>
