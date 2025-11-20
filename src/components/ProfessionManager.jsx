@@ -1,4 +1,4 @@
-// src/components/ProfessionManager.jsx - FIXED (Missing function added)
+// src/components/ProfessionManager.jsx - V7.0 (Full: Shared Specialties + Edit + Delete)
 import React, { useState, useEffect, useCallback } from 'react';
 import LoadingSpinner from './LoadingSpinner';
 import AlertMessage from './AlertMessage';
@@ -17,29 +17,38 @@ const TabButton = ({ text, isActive, onClick }) => (
 );
 
 const ProfessionManager = ({ API_URL, onLogout }) => {
-    const [activeTab, setActiveTab] = useState('professions'); // professions, specialties, symptoms
+    const [activeTab, setActiveTab] = useState('professions'); 
     const [data, setData] = useState({ professions: [], specialties: [], symptoms: [], mainCategories: [] });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [message, setMessage] = useState(null);
     
+    // --- מצב יצירה ---
     const [newItemName, setNewItemName] = useState('');
     const [selectedParentId, setSelectedParentId] = useState('');
+    const [parentType, setParentType] = useState('profession'); // 'profession' או 'category'
     const [saving, setSaving] = useState(false);
 
-    // --- 1. טעינת כל הנתונים ---
+    // --- מצב עריכה ---
+    const [editingItem, setEditingItem] = useState(null);
+    const [editNameVal, setEditNameVal] = useState('');
+
+    // 1. טעינת נתונים
     const fetchData = useCallback(async () => {
         setLoading(true); setError(null);
         try {
             const res = await fetch(`${API_URL}/api/admin/data/all-definitions`, { credentials: 'include' });
             if (res.status === 401 || res.status === 403) { onLogout(); return; }
-            if (!res.ok) throw new Error('שגיאה בטעינת הנתונים (ייתכן והשרת טרם עודכן)');
+            if (!res.ok) throw new Error('שגיאה בטעינת הנתונים');
             const result = await res.json();
             setData(result);
             
-            // הגדרת ברירת מחדל לבחירה ראשונית
-            const targetList = activeTab === 'professions' ? result.mainCategories : result.professions;
-            if (targetList && targetList.length > 0) setSelectedParentId(targetList[0].id);
+            // איפוס בחירה ברירת מחדל
+            if (activeTab === 'professions' && result.mainCategories.length > 0) {
+                setSelectedParentId(result.mainCategories[0].id);
+            } else if (result.professions.length > 0) {
+                setSelectedParentId(result.professions[0].id);
+            }
 
         } catch (err) { setError(err.message); } 
         finally { setLoading(false); }
@@ -47,7 +56,7 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
 
     useEffect(() => { fetchData(); }, [fetchData]);
 
-    // --- 2. יצירת פריט חדש ---
+    // 2. יצירת פריט חדש
     const handleCreate = async (e) => {
         e.preventDefault();
         if (!newItemName.trim() || !selectedParentId) return;
@@ -58,7 +67,12 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
             body = { name: newItemName, main_category_id: selectedParentId };
         } else if (activeTab === 'specialties') {
             endpoint = '/api/admin/specialties';
-            body = { name: newItemName, profession_id: selectedParentId };
+            // לוגיקה חכמה: האם זה שייך לקטגוריה או למקצוע?
+            if (parentType === 'category') {
+                body = { name: newItemName, main_category_id: selectedParentId, profession_id: null };
+            } else {
+                body = { name: newItemName, profession_id: selectedParentId, main_category_id: null };
+            }
         } else { // symptoms
             endpoint = '/api/admin/symptoms';
             body = { name: newItemName, profession_id: selectedParentId };
@@ -67,13 +81,10 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
         setSaving(true); setError(null); setMessage(null);
         try {
             const res = await fetch(`${API_URL}${endpoint}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
                 body: JSON.stringify(body)
             });
             if (!res.ok) throw new Error('שגיאה ביצירה');
-            
             setMessage('נוצר בהצלחה!');
             setNewItemName('');
             fetchData(); 
@@ -81,7 +92,7 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
         finally { setSaving(false); }
     };
 
-    // --- 3. מחיקת פריט ---
+    // 3. מחיקה
     const handleDelete = async (id, type) => {
         if (!window.confirm('האם אתה בטוח? פעולה זו תמחק גם מיפויים קיימים.')) return;
         
@@ -95,14 +106,95 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
         } catch (err) { alert(err.message); }
     };
 
-    // --- 4. עזרי תצוגה ---
+    // 4. עריכת שם
+    const startEdit = (item) => {
+        setEditingItem(item.id);
+        setEditNameVal(item.name);
+    };
+
+    const cancelEdit = () => {
+        setEditingItem(null);
+        setEditNameVal('');
+    };
+
+    const saveEdit = async (id) => {
+        if (!editNameVal.trim()) return;
+        setSaving(true);
+        try {
+            const res = await fetch(`${API_URL}/api/admin/data/update-name`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                body: JSON.stringify({ type: activeTab, id, name: editNameVal })
+            });
+            if (!res.ok) throw new Error('שגיאה בעדכון');
+            setMessage('עודכן בהצלחה!');
+            setEditingItem(null);
+            fetchData();
+        } catch (err) { alert('שגיאה: ' + err.message); } finally { setSaving(false); }
+    };
+
+    // --- עזרי תצוגה ולוגיקה ---
+
+    // בניית אפשרויות ה-Dropdown
+    const renderParentOptions = () => {
+        if (activeTab === 'professions') {
+            return data.mainCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>);
+        }
+        
+        if (activeTab === 'specialties') {
+            return (
+                <>
+                    <optgroup label="--- קטגוריות כלליות (משותף) ---">
+                        {data.mainCategories.map(c => (
+                            <option key={`cat-${c.id}`} value={`cat-${c.id}`}>{c.name} (כללי)</option>
+                        ))}
+                    </optgroup>
+                    <optgroup label="--- מקצועות ספציפיים ---">
+                        {data.professions.map(p => (
+                            <option key={`prof-${p.id}`} value={`prof-${p.id}`}>{p.name}</option>
+                        ))}
+                    </optgroup>
+                </>
+            );
+        }
+
+        // Default (Symptoms)
+        return data.professions.map(p => <option key={p.id} value={p.id}>{p.name}</option>);
+    };
+
+    // טיפול בבחירה ב-Dropdown
+    const handleSelectChange = (e) => {
+        const val = e.target.value;
+        if (activeTab === 'specialties') {
+            if (val.startsWith('cat-')) {
+                setParentType('category');
+                setSelectedParentId(val.replace('cat-', ''));
+            } else {
+                setParentType('profession');
+                setSelectedParentId(val.replace('prof-', ''));
+            }
+        } else {
+            setSelectedParentId(val);
+        }
+    };
+
+    // הצגת שם ההורה בטבלה
     const getParentName = (item) => {
-        if (activeTab === 'professions') return item.main_category_name || '-';
+        if (activeTab === 'professions') {
+            return data.mainCategories.find(c => c.id === item.main_category_id)?.name || '-';
+        }
+        if (activeTab === 'specialties') {
+            if (item.main_category_id) {
+                const cat = data.mainCategories.find(c => c.id === item.main_category_id);
+                return cat ? `🔵 ${cat.name} (כללי)` : 'כללי';
+            }
+            const prof = data.professions.find(p => p.id === item.profession_id);
+            return prof ? prof.name : '-';
+        }
+        // Symptoms
         const prof = data.professions.find(p => p.id === item.profession_id);
         return prof ? prof.name : '-';
     };
 
-    // --- !!! הפונקציה החסרה שגרמה לקריסה !!! ---
     const getFilteredList = () => {
         switch (activeTab) {
             case 'professions': return data.professions || [];
@@ -111,9 +203,8 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
             default: return [];
         }
     };
-    // --- !!! סוף התיקון !!! ---
 
-    const list = getFilteredList(); 
+    const list = getFilteredList();
 
     return (
         <div className="space-y-6">
@@ -124,98 +215,76 @@ const ProfessionManager = ({ API_URL, onLogout }) => {
             {message && <AlertMessage type="success" message={message} onDismiss={() => setMessage(null)} />}
             {error && <AlertMessage type="error" message={error} onDismiss={() => setError(null)} />}
 
-            {/* --- טאבים --- */}
             <div className="flex border-b border-gray-200 bg-white rounded-t-lg overflow-hidden">
-                <TabButton text="מקצועות" isActive={activeTab === 'professions'} onClick={() => setActiveTab('professions')} />
-                <TabButton text="התמחויות" isActive={activeTab === 'specialties'} onClick={() => setActiveTab('specialties')} />
-                <TabButton text="סימפטומים" isActive={activeTab === 'symptoms'} onClick={() => setActiveTab('symptoms')} />
+                <TabButton text="מקצועות" isActive={activeTab === 'professions'} onClick={() => {setActiveTab('professions'); setEditingItem(null);}} />
+                <TabButton text="התמחויות" isActive={activeTab === 'specialties'} onClick={() => {setActiveTab('specialties'); setEditingItem(null);}} />
+                <TabButton text="סימפטומים" isActive={activeTab === 'symptoms'} onClick={() => {setActiveTab('symptoms'); setEditingItem(null);}} />
             </div>
 
-            {/* --- טופס הוספה --- */}
             <form onSubmit={handleCreate} className="bg-white p-6 rounded-b-lg shadow space-y-4 border-t-0">
                 <h4 className="text-lg font-semibold text-gray-700">
-                    {activeTab === 'professions' ? 'הוספת מקצוע חדש' : 
-                     activeTab === 'specialties' ? 'הוספת התמחות' : 
-                     'הוספת סימפטום'}
+                    {activeTab === 'professions' ? 'הוספת מקצוע' : activeTab === 'specialties' ? 'הוספת התמחות' : 'הוספת סימפטום'}
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* שדה בחירה (הורה) */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                            {activeTab === 'professions' ? 'שייך לקטגוריה' : 'שייך למקצוע'}
+                            {activeTab === 'specialties' ? 'שייך ל- (כללי או ספציפי)' : 'שייך ל-'}
                         </label>
                         <select 
-                            value={selectedParentId} 
-                            onChange={(e) => setSelectedParentId(e.target.value)} 
+                            onChange={handleSelectChange} 
                             className="block w-full px-3 py-2 border border-gray-300 rounded-md bg-white"
+                            defaultValue=""
                         >
-                            <option value="" disabled>-- בחר שיוך --</option>
-                            {activeTab === 'professions' 
-                                ? (data.mainCategories || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)
-                                : (data.professions || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)
-                            }
+                            <option value="" disabled>-- בחר --</option>
+                            {renderParentOptions()}
                         </select>
                     </div>
-
-                    {/* שדה שם */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">שם הפריט</label>
-                        <input
-                            type="text"
-                            value={newItemName}
-                            onChange={(e) => setNewItemName(e.target.value)}
-                            className="block w-full px-3 py-2 border border-gray-300 rounded-md"
-                            placeholder="הקלד שם..."
-                        />
+                        <input type="text" value={newItemName} onChange={(e) => setNewItemName(e.target.value)} className="block w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="הקלד שם..." />
                     </div>
-
                     <div className="self-end">
-                        <button type="submit" disabled={loading || saving} className="w-full py-2 px-4 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition disabled:opacity-50">
-                            {saving ? 'שומר...' : '+ הוסף'}
-                        </button>
+                        <button type="submit" disabled={loading || saving} className="w-full py-2 px-4 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition disabled:opacity-50">{saving ? 'שומר...' : '+ הוסף'}</button>
                     </div>
                 </div>
             </form>
 
-            {/* --- טבלה --- */}
             <div className="bg-white p-6 rounded-lg shadow">
-                <h4 className="text-lg font-semibold mb-4">פריטים קיימים ({list.length})</h4>
-                {loading && list.length === 0 && <LoadingSpinner />}
-                
-                {!loading && list.length > 0 && (
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200 text-sm">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-4 py-3 text-right font-semibold text-gray-600">ID</th>
-                                    <th className="px-4 py-3 text-right font-semibold text-gray-600">שם</th>
-                                    <th className="px-4 py-3 text-right font-semibold text-gray-600">משויך ל-</th>
-                                    <th className="px-4 py-3 text-right font-semibold text-gray-600 w-24">פעולות</th>
+                <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200 text-sm">
+                        <thead className="bg-gray-50">
+                            <tr>
+                                <th className="px-4 py-3 text-right font-semibold text-gray-600 w-16">ID</th>
+                                <th className="px-4 py-3 text-right font-semibold text-gray-600">שם</th>
+                                <th className="px-4 py-3 text-right font-semibold text-gray-600">שיוך</th>
+                                <th className="px-4 py-3 text-right font-semibold text-gray-600 w-32">פעולות</th>
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                            {list.map(item => (
+                                <tr key={item.id} className="hover:bg-gray-50">
+                                    <td className="px-4 py-3 font-mono text-gray-400">#{item.id}</td>
+                                    <td className="px-4 py-3 font-medium text-gray-900">
+                                        {editingItem === item.id ? (
+                                            <input type="text" value={editNameVal} onChange={(e) => setEditNameVal(e.target.value)} className="border border-blue-400 rounded px-2 py-1 w-full" autoFocus />
+                                        ) : item.name}
+                                    </td>
+                                    <td className="px-4 py-3 text-gray-600">{getParentName(item)}</td>
+                                    <td className="px-4 py-3 flex gap-2">
+                                        {editingItem === item.id ? (
+                                            <> <button onClick={() => saveEdit(item.id)} className="text-green-600 font-bold">שמור</button> <button onClick={cancelEdit} className="text-gray-500">ביטול</button> </>
+                                        ) : (
+                                            <> 
+                                                <button onClick={() => startEdit(item)} className="text-blue-600 text-lg">✎</button>
+                                                {activeTab !== 'professions' && <button onClick={() => handleDelete(item.id, activeTab)} className="text-red-500 text-lg">🗑️</button>}
+                                            </>
+                                        )}
+                                    </td>
                                 </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {list.map(item => (
-                                    <tr key={item.id} className="hover:bg-gray-50">
-                                        <td className="px-4 py-3 font-mono text-gray-400">#{item.id}</td>
-                                        <td className="px-4 py-3 font-medium text-gray-900">{item.name}</td>
-                                        <td className="px-4 py-3 text-gray-600">{getParentName(item)}</td>
-                                        <td className="px-4 py-3">
-                                            {activeTab !== 'professions' && (
-                                                <button 
-                                                    onClick={() => handleDelete(item.id, activeTab)}
-                                                    className="text-red-500 hover:text-red-700 text-xs font-bold bg-red-50 px-2 py-1 rounded"
-                                                >
-                                                    מחק
-                                                </button>
-                                            )}
-                                            {activeTab === 'professions' && <span className="text-gray-400 text-xs">נעול</span>}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );
