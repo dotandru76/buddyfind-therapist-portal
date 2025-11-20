@@ -1,4 +1,4 @@
-// src/components/SymptomMapper.jsx - V10.5 (Visible Trash at Bottom-Right)
+// src/components/SymptomMapper.jsx - V11.0 (Raised Trash Icon)
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactFlow, {
   ReactFlowProvider,
@@ -80,7 +80,7 @@ const Sidebar = ({ symptoms }) => {
             <h4 style={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '5px' }}>בנק סימפטומים</h4>
             <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '10px', lineHeight: '1.4' }}>
                 גרור למשטח.<br/>
-                למחיקה: גרור לפח (למטה מימין) או Delete.
+                למחיקה: גרור לפח (בימין) או Delete.
             </div>
             {symptoms.map((sym) => (
                 <div 
@@ -219,16 +219,14 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
     const onNodeDrag = useCallback((event, node) => {
         if (!reactFlowWrapper.current) return;
         
-        // מיקום הפח החדש: פינה ימנית תחתונה
         const containerBounds = reactFlowWrapper.current.getBoundingClientRect();
         const mouseXInCanvas = event.clientX - containerBounds.left;
         const mouseYInCanvas = event.clientY - containerBounds.top;
         const width = containerBounds.width;
         const height = containerBounds.height;
         
-        // אזור רגישות: 150px מהפינה הימנית התחתונה
-        // (Width - 150 < X < Width) וגם (Height - 150 < Y < Height)
-        const isOverTrash = (mouseXInCanvas > width - 150 && mouseYInCanvas > height - 150);
+        // אזור רגישות: הגדלנו את הגובה ל-250px בגלל שהעלינו את הפח
+        const isOverTrash = (mouseXInCanvas > width - 150 && mouseYInCanvas > height - 250);
         
         setTrashHighlighted(isOverTrash);
 
@@ -257,14 +255,15 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
         setTrashHighlighted(false);
         if (node.type === 'specialtyBox') return;
 
-        // לוגיקת מחיקה (ימין למטה)
+        // לוגיקת מחיקה (ימין למטה - אזור מוגדל)
         const containerBounds = reactFlowWrapper.current.getBoundingClientRect();
         const mouseX = event.clientX - containerBounds.left;
         const mouseY = event.clientY - containerBounds.top;
         const width = containerBounds.width;
         const height = containerBounds.height;
 
-        if (mouseX > width - 150 && mouseY > height - 150) {
+        // הגדלנו את אזור התפיסה ל-250 פיקסלים מלמטה
+        if (mouseX > width - 150 && mouseY > height - 250) {
             setNodes((nds) => nds.filter((n) => n.id !== node.id));
             return;
         }
@@ -345,10 +344,12 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
                         <Background color="#cbd5e1" gap={25} />
                         <Controls position="top-left" />
                         
-                        {/* פח אשפה (מיקום מוחלט, ימין למטה) */}
+                        {/* פח אשפה - הועלה למעלה */}
                         <div 
                             style={{
-                                position: 'absolute', bottom: '30px', right: '30px', // שינוי לימין
+                                position: 'absolute', 
+                                bottom: '120px', // <--- שינוי גובה משמעותי
+                                right: '30px',
                                 width: trashHighlighted ? '90px' : '70px', 
                                 height: trashHighlighted ? '90px' : '70px',
                                 borderRadius: '50%',
