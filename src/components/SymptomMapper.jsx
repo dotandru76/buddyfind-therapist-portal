@@ -1,4 +1,4 @@
-// src/components/SymptomMapper.jsx - V5.0 (Fixed Drag & Drop Logic)
+// src/components/SymptomMapper.jsx - V6.0 (Visual Feedback & Highlighting)
 import React, { useState, useEffect, useCallback } from 'react';
 import ReactFlow, {
   ReactFlowProvider,
@@ -11,37 +11,62 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import LoadingSpinner from './LoadingSpinner';
 
-// --- 1. הגדרת הצמתים (עיצוב) ---
-const SpecialtyBoxNode = ({ data, selected }) => (
-  <div style={{ 
-      width: '100%', height: '100%', 
-      backgroundColor: data.color || '#e0f2fe', 
-      border: selected ? '2px solid #2563EB' : '1px solid #94a3b8',
-      borderRadius: '12px', 
-      boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
-      display: 'flex', flexDirection: 'column',
-      zIndex: -1 // תמיד מאחור
-  }}>
-    <div style={{ 
-        background: 'rgba(255,255,255,0.6)', padding: '8px', 
-        borderBottom: '1px solid rgba(0,0,0,0.1)', fontWeight: 'bold', 
-        textAlign: 'center', fontSize: '14px', color: '#1e293b'
-    }}>
-      {data.label}
-    </div>
-  </div>
-);
+// מידות קבועות לחישובים מדויקים
+const BOX_WIDTH = 280;
+const BOX_HEIGHT = 280;
 
-const SymptomPillNode = ({ data, selected }) => (
+// --- 1. רכיבי צמתים עם עיצוב דינמי ---
+
+const SpecialtyBoxNode = ({ data }) => {
+    // שינוי סגנון דינמי אם הקופסה "מודגשת" (בזמן גרירה מעליה)
+    const isHighlighted = data.isHighlighted;
+
+    return (
+        <div style={{ 
+            width: `${BOX_WIDTH}px`, height: `${BOX_HEIGHT}px`, 
+            backgroundColor: isHighlighted ? '#eff6ff' : (data.color || '#f8fafc'), // שינוי רקע בהיילייט
+            border: isHighlighted ? '3px dashed #2563EB' : '1px solid #cbd5e1', // מסגרת מודגשת
+            borderRadius: '16px', 
+            boxShadow: isHighlighted ? '0 0 15px rgba(37, 99, 235, 0.2)' : '0 4px 6px -1px rgba(0,0,0,0.05)',
+            display: 'flex', flexDirection: 'column',
+            transition: 'all 0.2s ease', // אנימציה חלקה
+            zIndex: -1
+        }}>
+            <div style={{ 
+                background: isHighlighted ? '#2563EB' : 'rgba(255,255,255,0.8)', 
+                color: isHighlighted ? 'white' : '#1e293b',
+                padding: '10px', 
+                borderBottom: '1px solid rgba(0,0,0,0.05)', 
+                fontWeight: 'bold', textAlign: 'center', fontSize: '15px',
+                borderTopLeftRadius: '14px', borderTopRightRadius: '14px',
+                transition: 'all 0.2s ease'
+            }}>
+                {data.label}
+            </div>
+            
+            {/* טקסט עזר שמופיע רק בגרירה מעל */}
+            {isHighlighted && (
+                <div style={{ 
+                    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                    color: '#2563EB', fontWeight: 'bold', opacity: 0.5 
+                }}>
+                    שחרר כדי לשייך 🎯
+                </div>
+            )}
+        </div>
+    );
+};
+
+const SymptomPillNode = ({ data }) => (
   <div style={{ 
       background: 'white', 
-      border: selected ? '2px solid #2563EB' : '1px solid #cbd5e1', 
+      border: '1px solid #64748b', 
       borderRadius: '99px', 
       padding: '6px 14px', 
       fontSize: '12px', fontWeight: '600', color: '#334155',
-      boxShadow: '0 2px 5px rgba(0,0,0,0.15)', 
+      boxShadow: '0 4px 6px rgba(0,0,0,0.1)', 
       cursor: 'grab', width: 'max-content',
-      zIndex: 100 // תמיד מקדימה
+      zIndex: 1000
   }}>
     {data.label}
   </div>
@@ -56,7 +81,7 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
     const [edges, setEdges, onEdgesChange] = useEdgesState([]); 
     const [loading, setLoading] = useState(true);
 
-    // טעינת נתונים
+    // טעינת נתונים ראשונית
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
@@ -74,16 +99,15 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
                 
                 const initialNodes = [];
                 
-                // יצירת קופסאות (התמחויות)
+                // יצירת קופסאות
                 (defs.specialties || []).forEach((spec, index) => {
                     initialNodes.push({
                         id: `spec-${spec.id}`,
                         type: 'specialtyBox',
-                        data: { label: spec.name, color: colors[index % colors.length], id: spec.id },
-                        // סידור בשורות של 3
-                        position: { x: (index % 3) * 320 + 300, y: Math.floor(index / 3) * 280 + 50 },
-                        style: { width: 280, height: 220 },
-                        draggable: false // הקופסאות קבועות כדי למנוע בלאגן
+                        data: { label: spec.name, color: colors[index % colors.length], id: spec.id, isHighlighted: false },
+                        position: { x: (index % 3) * (BOX_WIDTH + 50) + 350, y: Math.floor(index / 3) * (BOX_HEIGHT + 50) + 50 },
+                        style: { width: BOX_WIDTH, height: BOX_HEIGHT },
+                        draggable: false
                     });
                 });
 
@@ -99,12 +123,10 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
 
                     if (isAssigned) {
                         parentNode = `spec-${mapping.specialty_id}`;
-                        extent = 'parent'; // ננעל בתוך הקופסה
-                        // מיקום יחסי בתוך הקופסה
+                        extent = 'parent';
                         position = { x: 20 + (index % 2) * 120, y: 50 + Math.floor((index % 10) / 2) * 40 };
                     } else {
-                        // בצד שמאל (לא משויכים)
-                        position = { x: 20, y: 50 + unassignedY * 45 };
+                        position = { x: 30, y: 80 + unassignedY * 50 };
                         unassignedY++;
                     }
 
@@ -126,86 +148,111 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
         fetchData();
     }, [API_URL, onLogout, setNodes]);
 
-    // --- לוגיקת גרירה חכמה ---
+    // --- לוגיקת זיהוי חפיפה (משותפת) ---
+    const findTargetBox = useCallback((node, currentNodes) => {
+        // חישוב מיקום אבסולוטי של הסימפטום
+        let absX = node.position.x;
+        let absY = node.position.y;
+
+        if (node.parentNode) {
+            const parent = currentNodes.find(n => n.id === node.parentNode);
+            if (parent) {
+                absX += parent.position.x;
+                absY += parent.position.y;
+            }
+        }
+
+        const centerX = absX + 50; 
+        const centerY = absY + 20;
+
+        // בדיקה מול כל הקופסאות
+        return currentNodes.find(n => 
+            n.type === 'specialtyBox' &&
+            centerX >= n.position.x && 
+            centerX <= n.position.x + BOX_WIDTH &&
+            centerY >= n.position.y && 
+            centerY <= n.position.y + BOX_HEIGHT
+        );
+    }, []);
+
+    // --- אירוע 1: בזמן הגרירה (Highlight Logic) ---
+    const onNodeDrag = useCallback((event, node) => {
+        // אופטימיזציה: עדכון State רק אם יש שינוי בקופסה המודגשת
+        setNodes((nds) => {
+            const targetBox = findTargetBox(node, nds);
+            const targetId = targetBox ? targetBox.id : null;
+
+            // בדיקה אם צריך לעדכן כדי למנוע רינדורים מיותרים
+            const needsUpdate = nds.some(n => 
+                n.type === 'specialtyBox' && 
+                ((n.id === targetId && !n.data.isHighlighted) || (n.id !== targetId && n.data.isHighlighted))
+            );
+
+            if (!needsUpdate) return nds;
+
+            return nds.map(n => {
+                if (n.type === 'specialtyBox') {
+                    return {
+                        ...n,
+                        data: { ...n.data, isHighlighted: n.id === targetId } // מדליק/מכבה אור
+                    };
+                }
+                return n;
+            });
+        });
+    }, [findTargetBox, setNodes]);
+
+    // --- אירוע 2: סיום גרירה (Drop Logic) ---
     const onNodeDragStop = useCallback((event, node) => {
         if (node.type !== 'symptomPill') return;
 
-        // חישוב מרכז הפתקית
-        const nodeCenterX = node.position.x + (node.width || 100) / 2;
-        const nodeCenterY = node.position.y + (node.height || 40) / 2;
+        setNodes((nds) => {
+            // 1. נקה את כל ההדגשות (Highlight)
+            const cleanNodes = nds.map(n => n.type === 'specialtyBox' ? { ...n, data: { ...n.data, isHighlighted: false } } : n);
 
-        // האם הפתקית נמצאת כרגע במצב "ילד" (בתוך קופסה)?
-        // אם כן, הקואורדינטות הן יחסיות, וצריך להמיר אותן לאבסולוטיות כדי לבדוק חפיפה עם קופסאות אחרות
-        // (בגרסה פשוטה זו נניח שאם גוררים החוצה זה מתאפס, ואם גוררים פנימה זה נתפס)
+            // 2. מצא את הקופסה
+            const targetBox = findTargetBox(node, cleanNodes);
 
-        // מציאת קופסה שנמצאת מתחת למיקום הנוכחי
-        // (הערה: ב-ReactFlow המיקומים הם מוחלטים אלא אם יש parentNode)
-        
-        // נשתמש בבדיקה פשוטה: האם המשתמש גרר מעל קופסה כלשהי?
-        // לשם כך צריך להשתמש ב-event.target האמיתי מהדפדפן, או לחשב לפי מיקומי ה-Nodes.
-        
-        // פתרון יציב:
-        // 1. קבלת כל הקופסאות
-        const boxes = nodes.filter(n => n.type === 'specialtyBox');
-        
-        // 2. חישוב מיקום אבסולוטי משוער של הפתקית הנגררת
-        let absoluteNodeX = node.position.x;
-        let absoluteNodeY = node.position.y;
-        
-        if (node.parentNode) {
-            const parent = nodes.find(n => n.id === node.parentNode);
-            if (parent) {
-                absoluteNodeX += parent.position.x;
-                absoluteNodeY += parent.position.y;
-            }
-        }
+            return cleanNodes.map((n) => {
+                if (n.id === node.id) {
+                    // חישוב מיקום אבסולוטי נוכחי
+                    let currentAbsX = node.position.x;
+                    let currentAbsY = node.position.y;
+                    const oldParent = cleanNodes.find(p => p.id === node.parentNode);
+                    if (oldParent) {
+                        currentAbsX += oldParent.position.x;
+                        currentAbsY += oldParent.position.y;
+                    }
 
-        // 3. בדיקת חיתוך
-        let targetBox = null;
-        for (const box of boxes) {
-            if (
-                absoluteNodeX > box.position.x &&
-                absoluteNodeX < box.position.x + box.width &&
-                absoluteNodeY > box.position.y &&
-                absoluteNodeY < box.position.y + box.height
-            ) {
-                targetBox = box;
-                break;
-            }
-        }
-
-        setNodes((nds) => nds.map((n) => {
-            if (n.id === node.id) {
-                // מקרה א': גררנו לתוך קופסה (חדשה או קיימת)
-                if (targetBox) {
-                    // חישוב מיקום יחסי חדש בתוך הקופסה
-                    const relX = absoluteNodeX - targetBox.position.x;
-                    const relY = absoluteNodeY - targetBox.position.y;
-                    
-                    return {
-                        ...n,
-                        parentNode: targetBox.id,
-                        extent: 'parent',
-                        position: { x: relX, y: relY }
-                    };
+                    // אם נפלנו לתוך קופסה
+                    if (targetBox) {
+                        const relX = currentAbsX - targetBox.position.x;
+                        const relY = currentAbsY - targetBox.position.y;
+                        
+                        return {
+                            ...n,
+                            parentNode: targetBox.id,
+                            extent: 'parent',
+                            position: { x: Math.max(10, relX), y: Math.max(40, relY) }
+                        };
+                    } 
+                    // אם יצאנו החוצה (ניתוק)
+                    else {
+                        return {
+                            ...n,
+                            parentNode: undefined,
+                            extent: undefined,
+                            position: { x: 30, y: currentAbsY } // מחזיר לעמודה השמאלית בערך באותו גובה
+                        };
+                    }
                 }
-                // מקרה ב': גררנו לשטח ריק (ניתוק)
-                else {
-                    return {
-                        ...n,
-                        parentNode: undefined,
-                        extent: undefined,
-                        position: { x: 20, y: absoluteNodeY } // זורק אותו לצד שמאל באותו גובה בערך
-                    };
-                }
-            }
-            return n;
-        }));
+                return n;
+            });
+        });
+    }, [findTargetBox, setNodes]);
 
-    }, [nodes, setNodes]);
-
+    // שמירה
     const handleSave = async () => {
-        // אוספים רק את אלו שיש להם הורה
         const mappings = nodes
             .filter(n => n.type === 'symptomPill' && n.parentNode) 
             .map(n => ({
@@ -218,30 +265,46 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
                 method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
                 body: JSON.stringify({ mappings })
             });
-            if (res.ok) alert('✅ נשמר בהצלחה!');
-            else alert('❌ שגיאה בשמירה');
+            if (res.ok) {
+                alert(`✅ נשמר בהצלחה! (${mappings.length} קישורים)`);
+                // רענון כדי לוודא סנכרון
+                window.location.reload();
+            } else alert('❌ שגיאה בשמירה');
         } catch (err) { alert('שגיאת תקשורת'); }
     };
 
     if (loading) return <LoadingSpinner />;
 
     return (
-        <div className="bg-white p-6 rounded-lg shadow h-full flex flex-col">
+        <div className="bg-white p-6 rounded-lg shadow h-full flex flex-col relative">
             <div className="flex justify-between items-center mb-4 border-b pb-3">
-                <h3 className="text-2xl font-bold text-text-dark">מיפוי סימפטומים (גרסה יציבה)</h3>
-                <button onClick={handleSave} className="px-6 py-2 bg-blue-600 text-white rounded-full font-bold hover:bg-blue-700 shadow-md">
-                    💾 שמור מיפוי
+                <h3 className="text-2xl font-bold text-text-dark">מפת האבחון (עם פידבק ויזואלי)</h3>
+                <button onClick={handleSave} className="px-6 py-2 bg-blue-600 text-white rounded-full font-bold hover:bg-blue-700 shadow-md transition hover:scale-105">
+                    💾 שמור שינויים
                 </button>
             </div>
-            <div style={{ flexGrow: 1, height: '700px', border: '1px solid #e2e8f0', borderRadius: '16px', background: '#f8fafc' }}>
+            
+            <div style={{ flexGrow: 1, height: '700px', border: '1px solid #e2e8f0', borderRadius: '16px', background: '#f8fafc', position: 'relative' }}>
                 <ReactFlow
-                    nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
-                    onNodeDragStop={onNodeDragStop} nodeTypes={nodeTypes} fitView
+                    nodes={nodes}
+                    edges={edges}
+                    onNodesChange={onNodesChange}
+                    onEdgesChange={onEdgesChange}
+                    onNodeDrag={onNodeDrag}       // הוספנו את זה לפידבק בזמן אמת
+                    onNodeDragStop={onNodeDragStop}
+                    nodeTypes={nodeTypes}
+                    fitView
                 >
                     <Background color="#cbd5e1" gap={25} />
                     <Controls />
-                    <Panel position="top-left" className="bg-white/80 p-2 rounded border">
-                        גרור סימפטומים מהצד לקופסאות
+                    <Panel position="top-left" className="bg-white/90 p-3 rounded-xl border shadow-lg">
+                        <p className="font-bold text-sm mb-1">הוראות:</p>
+                        <ul className="text-xs text-gray-600 list-disc pl-4 space-y-1">
+                            <li>גרור סימפטום משמאל לתוך קופסה.</li>
+                            <li>הקופסה <strong>תאיר בכחול</strong> כשתהיה מעליה.</li>
+                            <li>שחרר כדי לשייך.</li>
+                            <li>גרור החוצה כדי לבטל שיוך.</li>
+                        </ul>
                     </Panel>
                 </ReactFlow>
             </div>
