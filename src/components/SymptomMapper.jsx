@@ -1,4 +1,4 @@
-// src/components/SymptomMapper.jsx - V14.0 (The Big Canvas & Perfect Layout)
+// src/components/SymptomMapper.jsx - FINAL VERSION (Full Screen Studio Mode)
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactFlow, {
   ReactFlowProvider,
@@ -213,13 +213,13 @@ const SymptomMapperContent = ({ API_URL, onLogout }) => {
         if (!reactFlowWrapper.current) return;
         
         const containerBounds = reactFlowWrapper.current.getBoundingClientRect();
-        const mouseX = event.clientX - containerBounds.left;
-        const mouseY = event.clientY - containerBounds.top;
+        const mouseXInCanvas = event.clientX - containerBounds.left;
+        const mouseYInCanvas = event.clientY - containerBounds.top;
         const width = containerBounds.width;
         const height = containerBounds.height;
         
         // פח בצד ימין למטה (אזור רגישות גדול)
-        const isOverTrash = (mouseX > width - 180 && mouseY > height - 200);
+        const isOverTrash = (mouseXInCanvas > width - 180 && mouseYInCanvas > height - 200);
         setTrashHighlighted(isOverTrash);
 
         if (node.type === 'symptomPill') {
