@@ -1,67 +1,37 @@
 // src/components/ContextMenu.jsx
 import React, { useCallback } from 'react';
 
-const ContextMenu = ({ id, top, left, type, onDuplicate, onDelete, onClose }) => {
-  // פונקציית העתקה כדי לסגור את התפריט אחרי הפעולה
-  const duplicate = useCallback(() => {
-    onDuplicate(id, type);
-    onClose();
-  }, [id, type, onDuplicate, onClose]);
-
-  // פונקציית מחיקה
+const ContextMenu = ({ top, left, type, onDuplicate, onDelete, onClose }) => {
   const deleteNode = useCallback(() => {
-    if (window.confirm(`האם למחוק את הפריט ${id} לצמיתות?`)) {
-      onDelete(id);
-      onClose();
-    }
-  }, [id, onDelete, onClose]);
+    onDelete();
+    onClose();
+  }, [onDelete, onClose]);
 
-  // הגדרת כותרת לפי סוג הפריט
-  const title = type === 'symptomPill' ? 'ניהול סימפטום' : 'ניהול התמחות';
-  const deleteText = type === 'symptomPill' ? 'מחק סימפטום' : 'מחק התמחות';
+  const duplicate = useCallback(() => {
+    if (onDuplicate) onDuplicate();
+    onClose();
+  }, [onDuplicate, onClose]);
 
   return (
     <div
-      style={{ top, left, zIndex: 50, position: 'absolute', background: 'white', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', padding: '8px 0', width: '180px', direction: 'rtl', textAlign: 'right' }}
-      className="context-menu"
+      style={{ top, left, zIndex: 50, position: 'absolute' }}
+      className="bg-white border border-gray-200 rounded-lg shadow-xl py-1 w-48 overflow-hidden"
     >
-      <div style={{ padding: '4px 12px', fontSize: '12px', fontWeight: 'bold', color: '#667eea', borderBottom: '1px solid #eee', marginBottom: '4px' }}>
-        {title}
-      </div>
-      
-      {type === 'symptomPill' && (
-        <button onClick={duplicate} className="context-menu-item">
-          שכפל סימפטום 🔄
+      {type === 'symptomPill' && onDuplicate && (
+        <button 
+            onClick={duplicate} 
+            className="w-full text-right px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
+        >
+            <span>🔁</span> שכפל סימפטום
         </button>
       )}
 
-      <button onClick={deleteNode} className="context-menu-item delete-item">
-        {deleteText} 🗑️
+      <button 
+        onClick={deleteNode} 
+        className="w-full text-right px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors flex items-center gap-2 border-t border-gray-100"
+      >
+        <span>🗑️</span> מחיקה
       </button>
-
-      {/* CSS עבור context-menu-item */}
-      <style>{`
-        .context-menu-item {
-          display: block;
-          width: 100%;
-          text-align: right;
-          padding: 8px 12px;
-          border: none;
-          background: none;
-          font-size: 14px;
-          cursor: pointer;
-          transition: background-color 0.1s;
-          color: #1e293b;
-        }
-        .context-menu-item:hover {
-          background-color: #f1f5f9;
-        }
-        .context-menu-item.delete-item {
-          color: #ef4444;
-          border-top: 1px solid #eee;
-          margin-top: 4px;
-        }
-      `}</style>
     </div>
   );
 };

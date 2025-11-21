@@ -1,4 +1,4 @@
-// src/components/SymptomMapper.jsx - FINAL VERSION (Full Screen Studio Mode)
+// src/components/SymptomMapper.jsx - V14.0 (Full Screen Studio Mode)
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactFlow, {
   ReactFlowProvider,

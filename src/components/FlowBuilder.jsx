@@ -1,4 +1,4 @@
-// src/components/FlowBuilder.jsx - V21.0 (Full Studio Mode - Edge to Edge)
+// src/components/FlowBuilder.jsx - V22.0 (Fixed Positioning - True Full Screen)
 import React, { useState, useCallback, useEffect } from 'react';
 import ReactFlow, {
   Controls,
@@ -16,15 +16,13 @@ import { questionsTree } from '../constants/questionsTree.js';
 import QuestionNode from './QuestionNode.jsx';
 
 const nodeTypes = { questionNode: QuestionNode };
-// זום ברירת מחדל ומיקום התחלתי ממורכז יותר
-const defaultViewport = { x: 0, y: 0, zoom: 0.7 }; 
+const defaultViewport = { x: 0, y: 0, zoom: 0.75 }; 
 
-// --- פונקציית המרה (לוגיקה לטעינת ברירת מחדל) ---
+// --- פונקציית המרה ---
 const convertTreeToFlow = (tree, initialData) => {
   const nodes = [];
   const edges = [];
   
-  // ריווח גדול יותר בין האלמנטים
   const positions = {
     start: { x: 100, y: 300 },
     targetEntity: { x: 600, y: 50 },
@@ -106,7 +104,7 @@ const convertTreeToFlow = (tree, initialData) => {
   return { initialNodes: nodes, initialEdges: edges };
 };
 
-// --- רכיב חלון העריכה (Inspector) - סרגל צד ---
+// --- רכיב חלון העריכה (Inspector) ---
 const NodeInspector = ({ node, setNodes, setEdges, onClose }) => {
   const [label, setLabel] = useState(node.data.label);
   const [questionType, setQuestionType] = useState(node.data.questionType || 'single');
@@ -156,20 +154,20 @@ const NodeInspector = ({ node, setNodes, setEdges, onClose }) => {
   };
 
   return (
-    <div className="flex flex-col w-80 bg-white border-r border-gray-200 h-full shadow-xl z-20">
+    <div className="w-96 bg-white border-r border-gray-200 h-full shadow-2xl z-50 flex flex-col absolute right-0 top-0 bottom-0 overflow-hidden">
       <div className="flex justify-between items-center p-4 border-b border-gray-200 bg-gray-50">
           <h4 className="font-bold text-lg text-gray-800">עריכת שאלה</h4>
           <button onClick={onClose} className="text-gray-500 hover:text-red-500 text-2xl leading-none">&times;</button>
       </div>
       
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      <div className="flex-1 overflow-y-auto p-5 space-y-6">
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">נוסח השאלה</label>
-            <textarea value={label} onChange={(e) => { setLabel(e.target.value); updateNodeData('label', e.target.value); }} rows={3} className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none" />
+            <label className="block text-sm font-bold text-gray-700 mb-2">נוסח השאלה</label>
+            <textarea value={label} onChange={(e) => { setLabel(e.target.value); updateNodeData('label', e.target.value); }} rows={3} className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none" />
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">סוג השאלה</label>
+            <label className="block text-sm font-bold text-gray-700 mb-2">סוג השאלה</label>
             <select value={questionType} onChange={(e) => { setQuestionType(e.target.value); updateNodeData('questionType', e.target.value); }} className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
                 <option value="single">בחירה יחידה (Single Choice)</option>
                 <option value="multiple">בחירה מרובה (Multiple Choice)</option>
@@ -178,33 +176,31 @@ const NodeInspector = ({ node, setNodes, setEdges, onClose }) => {
           </div>
 
           {questionType === 'slider' && (
-              <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-                  <label className="block text-sm font-semibold text-green-800 mb-2">טווח ערכים</label>
-                  <div className="flex gap-2">
-                      <div><span className="text-xs text-green-700">מינימום</span><input type="number" value={minVal} onChange={(e) => { setMinVal(e.target.value); updateNodeData('minVal', e.target.value); }} className="w-full p-1 border rounded text-sm" /></div>
-                      <div><span className="text-xs text-green-700">מקסימום</span><input type="number" value={maxVal} onChange={(e) => { setMaxVal(e.target.value); updateNodeData('maxVal', e.target.value); }} className="w-full p-1 border rounded text-sm" /></div>
+              <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                  <label className="block text-sm font-bold text-green-800 mb-3">טווח ערכים</label>
+                  <div className="flex gap-3">
+                      <div><span className="text-xs text-green-700 block mb-1">מינימום</span><input type="number" value={minVal} onChange={(e) => { setMinVal(e.target.value); updateNodeData('minVal', e.target.value); }} className="w-full p-2 border rounded text-sm" /></div>
+                      <div><span className="text-xs text-green-700 block mb-1">מקסימום</span><input type="number" value={maxVal} onChange={(e) => { setMaxVal(e.target.value); updateNodeData('maxVal', e.target.value); }} className="w-full p-2 border rounded text-sm" /></div>
                   </div>
               </div>
           )}
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-sm font-bold text-gray-700 mb-2">
                 {questionType === 'slider' ? 'יציאה (לשלב הבא)' : 'תשובות / יציאות'}
             </label>
             <div className="space-y-2">
               {outputs.map((output, index) => (
-                <div key={output.id || index} className="flex items-center gap-2">
-                  <div className="flex-grow bg-gray-50 p-2 rounded border border-gray-200">
-                      <input type="text" value={output.label} onChange={(e) => updateOutputLabel(index, e.target.value)} className="w-full bg-transparent border-none text-sm focus:outline-none" />
-                  </div>
+                <div key={output.id || index} className="flex items-center gap-2 bg-gray-50 p-2 rounded border border-gray-200">
+                  <input type="text" value={output.label} onChange={(e) => updateOutputLabel(index, e.target.value)} className="flex-grow bg-transparent border-none text-sm focus:outline-none font-medium" />
                   {questionType !== 'slider' && (
-                      <button onClick={() => deleteOutput(index)} className="text-red-500 hover:bg-red-50 p-1 rounded">✕</button>
+                      <button onClick={() => deleteOutput(index)} className="text-red-400 hover:text-red-600 p-1 rounded transition">✕</button>
                   )}
                 </div>
               ))}
             </div>
             {questionType !== 'slider' && (
-                <button onClick={addOutput} className="w-full mt-3 py-2 border-2 border-dashed border-blue-300 text-blue-600 rounded-lg text-sm font-bold hover:bg-blue-50 transition">+ הוסף תשובה</button>
+                <button onClick={addOutput} className="w-full mt-4 py-2.5 border-2 border-dashed border-blue-300 text-blue-600 rounded-lg text-sm font-bold hover:bg-blue-50 transition">+ הוסף תשובה</button>
             )}
           </div>
       </div>
@@ -234,7 +230,6 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
 
   useEffect(() => {
     if (!initialData) return;
-
     const loadFlow = async () => {
         try {
             const res = await fetch(`${API_URL}/api/admin/flow`, { credentials: 'include' });
@@ -252,13 +247,11 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
                 }
             }
         } catch (e) { console.error("Failed to load flow:", e); }
-
         const { initialNodes, initialEdges } = convertTreeToFlow(questionsTree, initialData);
         setNodes(initialNodes);
         setEdges(initialEdges);
         setNodeId(initialNodes.length + 1);
     };
-
     loadFlow();
   }, [initialData]); 
 
@@ -274,11 +267,7 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
   const onConnect = useCallback((connection) => {
       const sourceNode = nodes.find(n => n.id === connection.source);
       const sourceHandleLabel = sourceNode.data.outputs.find(o => String(o.id) === connection.sourceHandle)?.label || '';
-      const newEdge = { 
-        ...connection, 
-        label: sourceHandleLabel, 
-        type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: '#94a3b8', strokeWidth: 2 }
-      };
+      const newEdge = { ...connection, label: sourceHandleLabel, type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: '#94a3b8', strokeWidth: 2 }};
       setEdges((eds) => addEdge(newEdge, eds))
     }, [nodes]);
 
@@ -286,13 +275,8 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
     const newId = `new_${nodeId}`;
     const newNode = {
       id: newId,
-      data: { 
-        label: `שאלה חדשה`,
-        questionType: 'single', 
-        outputs: [{ id: 'opt1', label: 'כן' }, { id: 'opt2', label: 'לא' }],
-      },
-      position: { x: 100, y: 100 },
-      type: 'questionNode'
+      data: { label: `שאלה חדשה`, questionType: 'single', outputs: [{ id: 'opt1', label: 'כן' }, { id: 'opt2', label: 'לא' }] },
+      position: { x: 100, y: 100 }, type: 'questionNode'
     };
     setNodes((nds) => nds.concat(newNode));
     setNodeId(nodeId + 1);
@@ -300,26 +284,31 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
   
   const onSave = async () => {
     const cleanNodes = nodes.map(n => ({ id: n.id, data: n.data, position: n.position, type: n.type }));
-    const flowData = {
-      nodes: cleanNodes,
-      edges: edges.map(e => ({ id: e.id, source: e.source, sourceHandle: e.sourceHandle, target: e.target, label: e.label })),
-    };
+    const flowData = { nodes: cleanNodes, edges: edges.map(e => ({ id: e.id, source: e.source, sourceHandle: e.sourceHandle, target: e.target, label: e.label })), };
     try {
-        const res = await fetch(`${API_URL}/api/admin/flow`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(flowData)
-        });
-        if (!res.ok) throw new Error('שגיאה בשמירה בשרת');
+        const res = await fetch(`${API_URL}/api/admin/flow`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(flowData) });
+        if (!res.ok) throw new Error('שגיאה בשמירה');
         alert('התרשים נשמר בהצלחה!');
     } catch (err) { alert('שגיאה: ' + err.message); }
   };
 
   if (!initialData) return <div className="p-10 text-center text-gray-500">טוען...</div>;
 
-  // --- התיקון הגדול: Layout מלא ללא שוליים ---
+  // --- השינוי כאן: FIXED POSITION שמכסה את הכל ---
   return (
-    <div className="flex flex-col w-full bg-white border-t border-gray-200" style={{ height: 'calc(100vh - 80px)' }}>
+    <div style={{ 
+        position: 'fixed', 
+        top: '80px', // גובה ההדר ב-App.jsx
+        left: 0, 
+        right: 0, 
+        bottom: 0, 
+        zIndex: 40,
+        backgroundColor: 'white',
+        display: 'flex',
+        flexDirection: 'column'
+    }}>
       {/* סרגל כלים עליון */}
-      <div className="flex justify-between items-center px-6 py-3 bg-white border-b border-gray-200 shadow-sm flex-shrink-0">
+      <div className="flex justify-between items-center px-6 py-3 bg-white border-b border-gray-200 shadow-sm z-10">
         <h3 className="text-2xl font-bold text-gray-800">עורך שאלון (Studio Mode)</h3>
         <div className="flex gap-3">
             <button onClick={addNode} className="px-4 py-2 bg-green-50 text-green-700 rounded-lg text-sm font-bold hover:bg-green-100 transition border border-green-200">+ שאלה חדשה</button>
@@ -327,10 +316,8 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
         </div>
       </div>
 
-      {/* אזור עבודה ראשי (Row) */}
-      <div className="flex flex-grow overflow-hidden relative">
-        
-        {/* הקנבס - תופס את כל המקום שנשאר */}
+      <div className="flex-grow flex relative overflow-hidden">
+        {/* הקנבס */}
         <div className="flex-grow h-full relative bg-gray-50">
           <ReactFlow
             nodes={nodes}
@@ -351,7 +338,7 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
           </ReactFlow>
         </div>
         
-        {/* סרגל עריכה צדדי (מופיע רק כשלוחצים על שאלה) */}
+        {/* תפריט העריכה (מופיע מימין על גבי הקנבס או דוחק אותו) */}
         {selectedNode && (
           <NodeInspector 
             key={selectedNode.id} 
