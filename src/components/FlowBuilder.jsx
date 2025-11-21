@@ -1,4 +1,4 @@
-// src/components/FlowBuilder.jsx - V22.0 (Fixed Positioning - True Full Screen)
+// src/components/FlowBuilder.jsx - V23.0 (With Back Button)
 import React, { useState, useCallback, useEffect } from 'react';
 import ReactFlow, {
   Controls,
@@ -104,7 +104,7 @@ const convertTreeToFlow = (tree, initialData) => {
   return { initialNodes: nodes, initialEdges: edges };
 };
 
-// --- רכיב חלון העריכה (Inspector) ---
+// --- Inspector ---
 const NodeInspector = ({ node, setNodes, setEdges, onClose }) => {
   const [label, setLabel] = useState(node.data.label);
   const [questionType, setQuestionType] = useState(node.data.questionType || 'single');
@@ -165,7 +165,6 @@ const NodeInspector = ({ node, setNodes, setEdges, onClose }) => {
             <label className="block text-sm font-bold text-gray-700 mb-2">נוסח השאלה</label>
             <textarea value={label} onChange={(e) => { setLabel(e.target.value); updateNodeData('label', e.target.value); }} rows={3} className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none" />
           </div>
-
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">סוג השאלה</label>
             <select value={questionType} onChange={(e) => { setQuestionType(e.target.value); updateNodeData('questionType', e.target.value); }} className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
@@ -174,7 +173,6 @@ const NodeInspector = ({ node, setNodes, setEdges, onClose }) => {
                 <option value="slider">סליידר / טווח (Slider)</option>
             </select>
           </div>
-
           {questionType === 'slider' && (
               <div className="p-4 bg-green-50 rounded-lg border border-green-200">
                   <label className="block text-sm font-bold text-green-800 mb-3">טווח ערכים</label>
@@ -184,7 +182,6 @@ const NodeInspector = ({ node, setNodes, setEdges, onClose }) => {
                   </div>
               </div>
           )}
-
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">
                 {questionType === 'slider' ? 'יציאה (לשלב הבא)' : 'תשובות / יציאות'}
@@ -208,8 +205,9 @@ const NodeInspector = ({ node, setNodes, setEdges, onClose }) => {
   );
 };
 
-// --- FlowBuilderWrapper ---
-const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
+// --- Wrapper ---
+// --- !!! התיקון כאן: הוספת onBack !!! ---
+const FlowBuilderWrapper = ({ API_URL, onLogout, onBack }) => {
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
   const [nodeId, setNodeId] = useState(1); 
@@ -230,6 +228,7 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
 
   useEffect(() => {
     if (!initialData) return;
+
     const loadFlow = async () => {
         try {
             const res = await fetch(`${API_URL}/api/admin/flow`, { credentials: 'include' });
@@ -246,7 +245,9 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
                     return;
                 }
             }
-        } catch (e) { console.error("Failed to load flow:", e); }
+        } catch (e) {
+            console.error("Failed to load flow:", e);
+        }
         const { initialNodes, initialEdges } = convertTreeToFlow(questionsTree, initialData);
         setNodes(initialNodes);
         setEdges(initialEdges);
@@ -267,7 +268,13 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
   const onConnect = useCallback((connection) => {
       const sourceNode = nodes.find(n => n.id === connection.source);
       const sourceHandleLabel = sourceNode.data.outputs.find(o => String(o.id) === connection.sourceHandle)?.label || '';
-      const newEdge = { ...connection, label: sourceHandleLabel, type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: '#94a3b8', strokeWidth: 2 }};
+      const newEdge = { 
+        ...connection, 
+        label: sourceHandleLabel, 
+        type: 'smoothstep',
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style: { stroke: '#94a3b8', strokeWidth: 2 }
+      };
       setEdges((eds) => addEdge(newEdge, eds))
     }, [nodes]);
 
@@ -276,7 +283,8 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
     const newNode = {
       id: newId,
       data: { label: `שאלה חדשה`, questionType: 'single', outputs: [{ id: 'opt1', label: 'כן' }, { id: 'opt2', label: 'לא' }] },
-      position: { x: 100, y: 100 }, type: 'questionNode'
+      position: { x: 50, y: 50 },
+      type: 'questionNode'
     };
     setNodes((nds) => nds.concat(newNode));
     setNodeId(nodeId + 1);
@@ -284,21 +292,25 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
   
   const onSave = async () => {
     const cleanNodes = nodes.map(n => ({ id: n.id, data: n.data, position: n.position, type: n.type }));
-    const flowData = { nodes: cleanNodes, edges: edges.map(e => ({ id: e.id, source: e.source, sourceHandle: e.sourceHandle, target: e.target, label: e.label })), };
+    const flowData = {
+      nodes: cleanNodes,
+      edges: edges.map(e => ({ id: e.id, source: e.source, sourceHandle: e.sourceHandle, target: e.target, label: e.label })),
+    };
     try {
-        const res = await fetch(`${API_URL}/api/admin/flow`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(flowData) });
-        if (!res.ok) throw new Error('שגיאה בשמירה');
+        const res = await fetch(`${API_URL}/api/admin/flow`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(flowData)
+        });
+        if (!res.ok) throw new Error('שגיאה בשמירה בשרת');
         alert('התרשים נשמר בהצלחה!');
     } catch (err) { alert('שגיאה: ' + err.message); }
   };
 
   if (!initialData) return <div className="p-10 text-center text-gray-500">טוען...</div>;
 
-  // --- השינוי כאן: FIXED POSITION שמכסה את הכל ---
   return (
     <div style={{ 
         position: 'fixed', 
-        top: '80px', // גובה ההדר ב-App.jsx
+        top: '80px', 
         left: 0, 
         right: 0, 
         bottom: 0, 
@@ -307,9 +319,11 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
         display: 'flex',
         flexDirection: 'column'
     }}>
-      {/* סרגל כלים עליון */}
       <div className="flex justify-between items-center px-6 py-3 bg-white border-b border-gray-200 shadow-sm z-10">
-        <h3 className="text-2xl font-bold text-gray-800">עורך שאלון (Studio Mode)</h3>
+        <div className="flex items-center gap-4">
+            <button onClick={onBack} className="text-gray-500 hover:text-gray-800 font-bold text-lg">➜ חזור</button>
+            <h3 className="text-2xl font-bold text-gray-800">עורך שאלון (Studio Mode)</h3>
+        </div>
         <div className="flex gap-3">
             <button onClick={addNode} className="px-4 py-2 bg-green-50 text-green-700 rounded-lg text-sm font-bold hover:bg-green-100 transition border border-green-200">+ שאלה חדשה</button>
             <button onClick={onSave} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition shadow-md">שמור שינויים</button>
@@ -317,7 +331,6 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
       </div>
 
       <div className="flex-grow flex relative overflow-hidden">
-        {/* הקנבס */}
         <div className="flex-grow h-full relative bg-gray-50">
           <ReactFlow
             nodes={nodes}
@@ -338,7 +351,6 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
           </ReactFlow>
         </div>
         
-        {/* תפריט העריכה (מופיע מימין על גבי הקנבס או דוחק אותו) */}
         {selectedNode && (
           <NodeInspector 
             key={selectedNode.id} 
@@ -353,8 +365,8 @@ const FlowBuilderWrapper = ({ API_URL, onLogout }) => {
   );
 }
 
-export default ({ API_URL, onLogout }) => (
+export default ({ API_URL, onLogout, onBack }) => (
   <ReactFlowProvider>
-    <FlowBuilderWrapper API_URL={API_URL} onLogout={onLogout} />
+    <FlowBuilderWrapper API_URL={API_URL} onLogout={onLogout} onBack={onBack} />
   </ReactFlowProvider>
 );
