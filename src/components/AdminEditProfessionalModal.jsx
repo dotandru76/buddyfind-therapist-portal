@@ -1,4 +1,4 @@
-// src/components/AdminEditProfessionalModal.jsx
+// src/components/AdminEditProfessionalModal.jsx - V2.0 (Crash Fix)
 import React, { useState, useEffect } from 'react';
 
 const AdminEditProfessionalModal = ({ API_URL, professionalId, onClose, onSave }) => {
@@ -6,24 +6,35 @@ const AdminEditProfessionalModal = ({ API_URL, professionalId, onClose, onSave }
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        let isMounted = true;
         // טעינת פרטי המטפל
         fetch(`${API_URL}/api/admin/professionals/${professionalId}`, { credentials: 'include' })
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) throw new Error('Failed to fetch data');
+                return res.json();
+            })
             .then(data => {
-                setFormData({
-                    full_name: data.full_name || '',
-                    bio: data.bio || '',
-                    phone_number: data.phone_number || '',
-                    license_number: data.license_number || '',
-                    is_verified: data.is_verified,
-                    offers_reduced_fee: data.offers_reduced_fee
-                });
-                setLoading(false);
+                if (isMounted) {
+                    setFormData({
+                        full_name: data.full_name || '',
+                        bio: data.bio || '',
+                        phone_number: data.phone_number || '',
+                        license_number: data.license_number || '',
+                        is_verified: data.is_verified,
+                        offers_reduced_fee: data.offers_reduced_fee
+                    });
+                    setLoading(false);
+                }
             })
             .catch(err => {
-                alert('שגיאה בטעינת נתונים');
-                onClose();
+                console.error("Modal Error:", err);
+                if (isMounted) {
+                    alert('שגיאה בטעינת נתונים (ייתכן והמטפל נמחק)');
+                    onClose();
+                }
             });
+            
+        return () => { isMounted = false; };
     }, [API_URL, professionalId, onClose]);
 
     const handleSubmit = async (e) => {
@@ -44,7 +55,9 @@ const AdminEditProfessionalModal = ({ API_URL, professionalId, onClose, onSave }
         } catch (e) { console.error(e); }
     };
 
-    if (loading) return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 text-white">טוען...</div>;
+    // --- התיקון הקריטי: הגנה מפני קריסה ---
+    if (loading) return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 text-white">טוען נתונים...</div>;
+    if (!formData) return null; 
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
