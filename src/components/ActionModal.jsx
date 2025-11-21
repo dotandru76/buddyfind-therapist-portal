@@ -1,11 +1,12 @@
-// src/components/ActionModal.jsx - SECURED (Fixed Case-Sensitivity Import)
+// src/components/ActionModal.jsx - V2.0 (Full Admin Management: Edit & Delete)
 import React, { useState, useEffect, useMemo } from 'react';
 import moment from 'moment';
-// --- !!! התיקון: החזרת ה-A הגדולה וסיומת .jsx !!! ---
 import AdminResolveReviewModal from './AdminResolveReviewModal.jsx'; 
+import AdminEditProfessionalModal from './AdminEditProfessionalModal.jsx'; // <-- ייבוא המודאל החדש
 
-// (רכיבי עזר פנימיים)
+// --- רכיבי עזר פנימיים ---
 const LoadingSpinner = () => ( <div className="text-center p-5"><div className="spinner w-8 h-8 mx-auto border-t-primary-blue border-r-primary-blue"></div></div> );
+
 const AlertMessage = ({ type, message, onDismiss }) => {
     if (!message) return null;
     const baseClasses = "px-4 py-3 rounded relative mb-4 text-right";
@@ -21,26 +22,34 @@ const AlertMessage = ({ type, message, onDismiss }) => {
         </div>
     );
 };
-const ActionButton = ({ onClick, text, color, isLoading, ...props }) => ( <button onClick={onClick} disabled={isLoading} className={`px-3 py-1 text-xs font-medium text-white rounded-md transition ${ color === 'green' ? 'bg-green-500 hover:bg-green-600' : color === 'red' ? 'bg-red-500 hover:bg-red-600' : color === 'blue' ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-500 hover:bg-gray-600' } disabled:opacity-50`} {...props} > {isLoading ? '...' : text} </button> );
+
+const ActionButton = ({ onClick, text, color, isLoading, ...props }) => ( 
+    <button onClick={onClick} disabled={isLoading} className={`px-3 py-1 text-xs font-medium text-white rounded-md transition ${ color === 'green' ? 'bg-green-500 hover:bg-green-600' : color === 'red' ? 'bg-red-500 hover:bg-red-600' : color === 'blue' ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-500 hover:bg-gray-600' } disabled:opacity-50`} {...props} > 
+        {isLoading ? '...' : text} 
+    </button> 
+);
 
 const ActionModal = ({ modalType, API_URL, onClose, onActionComplete, onLogout }) => {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [actionLoading, setActionLoading] = useState(null); 
+    
+    // מצבים למודאלים פנימיים
     const [viewingReview, setViewingReview] = useState(null); 
+    const [editId, setEditId] = useState(null); // ID של המטפל לעריכה
 
     const config = useMemo(() => {
         switch (modalType) {
             case 'reviews':
                 return {
-                    title: 'ניהול חוות דעת ממתינות (מערכת ישנה)',
+                    title: 'ניהול חוות דעת ממתינות',
                     endpoint: `${API_URL}/api/admin/reviews/pending-admin`,
                     headers: ['תאריך', 'קוד לקוח', 'ביקורת', 'פעולות'],
                 };
             case 'disputed':
                 return {
-                    title: 'טיפול בערעורים (מערכת שאלונים)',
+                    title: 'טיפול בערעורים (שאלונים)',
                     endpoint: `${API_URL}/api/admin/questionnaires/disputed`,
                     headers: ['מטפל מערער', 'לקוח', 'שם שאלון', 'פעולות'],
                 };
@@ -48,7 +57,7 @@ const ActionModal = ({ modalType, API_URL, onClose, onActionComplete, onLogout }
                 return {
                     title: 'ניהול מטפלים',
                     endpoint: `${API_URL}/api/admin/users/professionals`,
-                    headers: ['שם', 'מקצוע', 'מספר רישיון', 'סטטוס', 'פעולות'],
+                    headers: ['שם', 'מקצוע', 'מספר רישיון', 'סטטוס', 'פעולות (עריכה / מחיקה / אישור)'],
                 };
             case 'users':
                 return {
@@ -75,9 +84,7 @@ const ActionModal = ({ modalType, API_URL, onClose, onActionComplete, onLogout }
             })
             .then(setData)
             .catch(err => {
-                if (err.message !== 'Unauthorized') {
-                    setError(err.message);
-                }
+                if (err.message !== 'Unauthorized') setError(err.message);
             })
             .finally(() => setLoading(false));
     }, [config, onLogout]); 
@@ -138,14 +145,47 @@ const ActionModal = ({ modalType, API_URL, onClose, onActionComplete, onLogout }
         finally { setActionLoading(null); }
     };
 
+    // --- מחיקת משתמש ומטפל (פעולה חדשה) ---
+    const handleDeleteUser = async (profId) => {
+        if (!window.confirm('⚠️ זהירות!\nפעולה זו תמחק את המשתמש, את פרופיל המטפל ואת כל הנתונים הקשורים אליו לצמיתות.\nהאם להמשיך?')) return;
+        
+        setActionLoading(`${profId}-delete`);
+        try {
+            const res = await fetch(`${API_URL}/api/admin/users/full-delete/${profId}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            });
+            
+            if (res.status === 401 || res.status === 403) { onLogout(); return; }
+            if (!res.ok) { const data = await res.json(); throw new Error(data.error || 'שגיאה במחיקה.'); }
+
+            // הסרה מהטבלה
+            setData(prev => prev.filter(item => item.id !== profId));
+            onActionComplete();
+            alert('המשתמש נמחק בהצלחה.');
+
+        } catch (err) { setError(err.message); }
+        finally { setActionLoading(null); }
+    };
+
     const handleResolveComplete = (message) => {
         setError(message); 
         setData(prev => prev.filter(item => item.id !== viewingReview.id)); 
         setViewingReview(null); 
         onActionComplete(); 
     };
+    
+    const handleEditSave = () => {
+        setEditId(null);
+        // רענון הנתונים לאחר עריכה כדי לראות את השינויים בטבלה
+        setLoading(true);
+        fetch(config.endpoint, { credentials: 'include' })
+            .then(res => res.json())
+            .then(setData)
+            .finally(() => setLoading(false));
+    };
 
-    // --- פונקציית עזר לרנדור טבלה ---
+    // --- רינדור שורות הטבלה ---
     const renderRow = (item) => {
         switch (modalType) {
             case 'disputed':
@@ -155,12 +195,7 @@ const ActionModal = ({ modalType, API_URL, onClose, onActionComplete, onLogout }
                         <td className="px-4 py-3 whitespace-nowrap">{item.client_email}</td>
                         <td className="px-4 py-3 whitespace-nowrap">{item.questionnaire_name}</td>
                         <td className="px-4 py-3 whitespace-nowrap space-x-2 space-x-reverse">
-                            <ActionButton
-                                text="פתח לטיפול"
-                                color="blue"
-                                isLoading={actionLoading === item.id}
-                                onClick={() => setViewingReview(item)}
-                            />
+                            <ActionButton text="פתח לטיפול" color="blue" isLoading={actionLoading === item.id} onClick={() => setViewingReview(item)} />
                         </td>
                     </tr>
                 );
@@ -169,53 +204,36 @@ const ActionModal = ({ modalType, API_URL, onClose, onActionComplete, onLogout }
                     <tr key={item.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 whitespace-nowrap">{new Date(item.created_at).toLocaleDateString('he-IL')}</td>
                         <td className="px-4 py-3 whitespace-nowrap font-mono">{item.client_anon_id}</td>
-                        <td className="px-4 py-3">
-                            <span className="font-bold">({item.rating}/5)</span> {item.review_text}
-                        </td>
+                        <td className="px-4 py-3"><span className="font-bold">({item.rating}/5)</span> {item.review_text}</td>
                         <td className="px-4 py-3 whitespace-nowrap space-x-2 space-x-reverse">
-                            <ActionButton
-                                text="אשר (למטפל)"
-                                color="green"
-                                isLoading={actionLoading === item.id}
-                                onClick={() => handleReviewAction(item.id, 'pending_therapist')}
-                            />
-                            <ActionButton
-                                text="דחה"
-                                color="red"
-                                isLoading={actionLoading === item.id}
-                                onClick={() => handleReviewAction(item.id, 'rejected')}
-                            />
+                            <ActionButton text="אשר (למטפל)" color="green" isLoading={actionLoading === item.id} onClick={() => handleReviewAction(item.id, 'pending_therapist')} />
+                            <ActionButton text="דחה" color="red" isLoading={actionLoading === item.id} onClick={() => handleReviewAction(item.id, 'rejected')} />
                         </td>
                     </tr>
                 );
             case 'professionals': {
                 const newStatusText = item.active_status === 'active' ? 'השעה' : 'הפעל';
                 const newStatusColor = item.active_status === 'active' ? 'red' : 'green';
-                const licenseNum = item.license_number || '';
-                let professionPathId = '1'; 
-                if (licenseNum && licenseNum.includes('-')) {
-                    professionPathId = licenseNum.split('-')[0];
-                }
-                const licenseCheckUrl = `https://practitioners.health.gov.il/Practitioners/${professionPathId}/search?name=${encodeURIComponent(item.full_name)}&license=${encodeURIComponent(licenseNum)}&certificate=`;
+                const licenseCheckUrl = `https://practitioners.health.gov.il/Practitioners`;
                 
                 return (
                     <tr key={item.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 whitespace-nowrap font-semibold">{item.full_name}</td>
                         <td className="px-4 py-3 whitespace-nowrap">{item.profession}</td>
                         <td className="px-4 py-3 whitespace-nowrap font-mono">
-                            {item.license_number ? (
-                                <a href={licenseCheckUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 hover:underline" title="לחץ לבדיקה במשרד הבריאות">
-                                    {item.license_number} 🔗
-                                </a>
-                            ) : (<span className="text-gray-400">לא הוזן</span>)}
+                            {item.license_number ? <a href={licenseCheckUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{item.license_number} 🔗</a> : <span className="text-gray-400">חסר</span>}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
-                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${item.active_status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                                {item.active_status === 'active' ? 'פעיל' : 'מושעה'}
-                            </span>
+                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${item.active_status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>{item.active_status === 'active' ? 'פעיל' : 'מושעה'}</span>
                             {item.is_verified === 1 && (<span className="ml-2 px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">מאומת</span>)}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap space-x-2 space-x-reverse">
+                            {/* כפתורים חדשים: עריכה ומחיקה */}
+                            <button onClick={() => setEditId(item.id)} className="text-xl px-1 hover:scale-110 transition" title="ערוך פרטים">✏️</button>
+                            <button onClick={() => handleDeleteUser(item.id)} className="text-xl px-1 text-red-500 hover:scale-110 transition" title="מחק משתמש">🗑️</button>
+                            
+                            {/* כפתורים ישנים */}
+                            <span className="text-gray-300">|</span>
                             <ActionButton text={newStatusText} color={newStatusColor} isLoading={actionLoading === item.id} onClick={() => handleProfessionalAction(item.id, item.active_status)} />
                             {item.is_verified === 0 ? (
                                 <ActionButton text="אשר וי" color="blue" isLoading={actionLoading === `${item.id}-verify`} onClick={() => handleVerifyAction(item.id, 1)} />
@@ -244,17 +262,16 @@ const ActionModal = ({ modalType, API_URL, onClose, onActionComplete, onLogout }
     return (
         <>
             {viewingReview && (
-                <AdminResolveReviewModal
-                    API_URL={API_URL}
-                    review={viewingReview}
-                    onClose={() => setViewingReview(null)}
-                    onActionComplete={handleResolveComplete}
-                    onLogout={onLogout}
-                />
+                <AdminResolveReviewModal API_URL={API_URL} review={viewingReview} onClose={() => setViewingReview(null)} onActionComplete={handleResolveComplete} onLogout={onLogout} />
+            )}
+
+            {/* --- המודאל החדש לעריכת מטפל --- */}
+            {editId && (
+                <AdminEditProfessionalModal API_URL={API_URL} professionalId={editId} onClose={() => setEditId(null)} onSave={handleEditSave} />
             )}
         
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
-                <div className="bg-white p-6 md:p-8 rounded-2xl w-full max-w-4xl relative shadow-xl text-right max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                <div className="bg-white p-6 md:p-8 rounded-2xl w-full max-w-5xl relative shadow-xl text-right max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                     <h2 className="text-2xl font-bold text-text-dark mb-4 border-b pb-2">{config.title}</h2>
                     <button onClick={onClose} className="absolute top-4 left-4 text-gray-500 text-2xl leading-none transition hover:text-red-500">&times;</button>
                     
@@ -262,7 +279,7 @@ const ActionModal = ({ modalType, API_URL, onClose, onActionComplete, onLogout }
                     {loading && <LoadingSpinner />}
 
                     {!loading && !error && (
-                        <div className="mt-4">
+                        <div className="mt-4 overflow-x-auto">
                             <table className="min-w-full divide-y divide-gray-200 text-sm">
                                 <thead className="bg-gray-50">
                                     <tr>
