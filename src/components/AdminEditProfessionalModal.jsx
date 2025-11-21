@@ -1,4 +1,4 @@
-// src/components/AdminEditProfessionalModal.jsx - V-FINAL (Production Ready)
+// src/components/AdminEditProfessionalModal.jsx - V-SAFE (No Animations + Console Logs)
 import React, { useState, useEffect } from 'react';
 
 const AdminEditProfessionalModal = ({ API_URL, professionalId, onClose, onSave }) => {
@@ -6,32 +6,37 @@ const AdminEditProfessionalModal = ({ API_URL, professionalId, onClose, onSave }
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    console.log(`[Modal Render] ID: ${professionalId}, Loading: ${loading}, Data:`, formData);
+
     useEffect(() => {
         let isMounted = true;
-        // טעינת נתונים
+        console.log('[Modal Effect] Fetching data...');
+        
         fetch(`${API_URL}/api/admin/professionals/${professionalId}`, { credentials: 'include' })
             .then(res => {
                 if (!res.ok) {
-                    if (res.status === 404) throw new Error('מטפל לא נמצא (רשומה שבורה)');
-                    throw new Error('שגיאה בטעינת נתונים');
+                    if (res.status === 404) throw new Error('מטפל לא נמצא');
+                    throw new Error(`שגיאת שרת: ${res.status}`);
                 }
                 return res.json();
             })
             .then(data => {
+                console.log('[Modal Effect] Data received:', data);
                 if (isMounted) {
+                    // אבטחת שדות - מניעת null
                     setFormData({
                         full_name: data.full_name || '',
                         bio: data.bio || '',
                         phone_number: data.phone_number || '',
                         license_number: data.license_number || '',
-                        is_verified: data.is_verified,
-                        offers_reduced_fee: data.offers_reduced_fee
+                        is_verified: data.is_verified === 1 ? 1 : 0,
+                        offers_reduced_fee: data.offers_reduced_fee === 1 ? 1 : 0
                     });
                     setLoading(false);
                 }
             })
             .catch(err => {
-                console.error(err);
+                console.error('[Modal Effect] Error:', err);
                 if (isMounted) {
                     setError(err.message);
                     setLoading(false);
@@ -44,6 +49,7 @@ const AdminEditProfessionalModal = ({ API_URL, professionalId, onClose, onSave }
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
+            console.log('[Modal Submit] Sending update...');
             const res = await fetch(`${API_URL}/api/admin/professionals/${professionalId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -52,118 +58,85 @@ const AdminEditProfessionalModal = ({ API_URL, professionalId, onClose, onSave }
             });
             if (res.ok) {
                 alert('עודכן בהצלחה!');
-                onSave(); // סגירה ורענון
+                onSave();
             } else {
                 alert('שגיאה בעדכון');
             }
         } catch (e) { console.error(e); }
     };
 
-    // --- תצוגות מצב (מונע מסך שחור) ---
-
-    // 1. מצב טעינה
+    // 1. מסך טעינה פשוט
     if (loading) {
         return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-                <div className="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center animate-pulse">
-                    <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-                    <p className="text-gray-700 font-bold">טוען נתוני מטפל...</p>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
+                <div className="bg-white p-5 rounded text-black font-bold">
+                    טוען נתונים... (נא להמתין)
                 </div>
             </div>
         );
     }
 
-    // 2. מצב שגיאה (למשל ID 50)
-    if (error || !formData) {
+    // 2. מסך שגיאה
+    if (error) {
         return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-                <div className="bg-white p-6 rounded-xl shadow-2xl text-center max-w-sm border-t-4 border-red-500">
-                    <h3 className="text-xl font-bold text-red-600 mb-2">שגיאה</h3>
-                    <p className="mb-6 text-gray-600">{error || 'לא ניתן לטעון את הנתונים.'}</p>
-                    <button 
-                        onClick={onClose} 
-                        className="px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition shadow-md"
-                    >
-                        סגור
-                    </button>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
+                <div className="bg-white p-5 rounded text-center max-w-sm border-2 border-red-500">
+                    <h3 className="text-red-600 font-bold mb-2">שגיאה</h3>
+                    <p>{error}</p>
+                    <button onClick={onClose} className="mt-4 bg-gray-300 px-4 py-2 rounded">סגור</button>
                 </div>
             </div>
         );
     }
 
-    // 3. הטופס התקין
+    // 3. הטופס (ללא אנימציות מסובכות)
+    if (!formData) return null; // הגנה סופית
+
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-8 text-right overflow-y-auto max-h-[90vh] transform transition-all scale-100">
-                
-                <div className="flex justify-between items-center mb-6 border-b pb-4">
-                    <h3 className="text-2xl font-bold text-gray-800">עריכת מטפל: {formData.full_name}</h3>
-                    <button onClick={onClose} className="text-gray-400 text-3xl hover:text-red-500 transition">&times;</button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+            {/* stopPropagation מונע סגירה כשלוחצים בתוך הטופס */}
+            <div 
+                className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 text-right overflow-y-auto max-h-[90vh]" 
+                onClick={(e) => e.stopPropagation()}
+                style={{ direction: 'rtl' }}
+            >
+                <div className="flex justify-between items-center mb-4 border-b pb-2">
+                    <h3 className="text-xl font-bold text-gray-800">עריכת פרטים</h3>
+                    <button onClick={onClose} className="text-3xl leading-none hover:text-red-500">&times;</button>
                 </div>
                 
-                <form onSubmit={handleSubmit} className="space-y-5">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div>
-                            <label className="block text-sm font-bold mb-1 text-gray-700">שם מלא</label>
-                            <input 
-                                className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" 
-                                value={formData.full_name}
-                                onChange={e => setFormData({...formData, full_name: e.target.value})}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-bold mb-1 text-gray-700">טלפון</label>
-                            <input 
-                                className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" 
-                                value={formData.phone_number}
-                                onChange={e => setFormData({...formData, phone_number: e.target.value})}
-                                style={{ direction: 'ltr', textAlign: 'right' }}
-                            />
-                        </div>
-                    </div>
-
+                <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-bold mb-1 text-gray-700">מספר רישיון</label>
-                        <input 
-                            className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" 
-                            value={formData.license_number}
-                            onChange={e => setFormData({...formData, license_number: e.target.value})}
-                        />
+                        <label className="block text-sm font-bold mb-1">שם מלא</label>
+                        <input className="w-full border p-2 rounded" value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} />
                     </div>
-
                     <div>
-                        <label className="block text-sm font-bold mb-1 text-gray-700">אודות (Bio)</label>
-                        <textarea 
-                            className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" rows="5"
-                            value={formData.bio}
-                            onChange={e => setFormData({...formData, bio: e.target.value})}
-                        />
+                        <label className="block text-sm font-bold mb-1">טלפון</label>
+                        <input className="w-full border p-2 rounded" value={formData.phone_number} onChange={e => setFormData({...formData, phone_number: e.target.value})} style={{direction: 'ltr', textAlign: 'right'}} />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold mb-1">רישיון</label>
+                        <input className="w-full border p-2 rounded" value={formData.license_number} onChange={e => setFormData({...formData, license_number: e.target.value})} />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold mb-1">אודות</label>
+                        <textarea className="w-full border p-2 rounded" rows="4" value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} />
                     </div>
                     
-                    <div className="flex flex-col sm:flex-row gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200">
-                        <label className="flex items-center gap-3 cursor-pointer p-2 hover:bg-white rounded-lg transition">
-                            <input 
-                                type="checkbox" 
-                                checked={formData.is_verified === 1}
-                                onChange={e => setFormData({...formData, is_verified: e.target.checked ? 1 : 0})}
-                                className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
-                            />
-                            <span className="text-gray-800 font-medium">מאומת (וי כחול)</span>
+                    <div className="flex gap-4 bg-gray-100 p-3 rounded">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" checked={formData.is_verified === 1} onChange={e => setFormData({...formData, is_verified: e.target.checked ? 1 : 0})} className="w-5 h-5"/>
+                            <span>מאומת</span>
                         </label>
-                        <label className="flex items-center gap-3 cursor-pointer p-2 hover:bg-white rounded-lg transition">
-                            <input 
-                                type="checkbox" 
-                                checked={formData.offers_reduced_fee === 1}
-                                onChange={e => setFormData({...formData, offers_reduced_fee: e.target.checked ? 1 : 0})}
-                                className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500"
-                            />
-                            <span className="text-gray-800 font-medium">מנוי PRO (מקודם)</span>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" checked={formData.offers_reduced_fee === 1} onChange={e => setFormData({...formData, offers_reduced_fee: e.target.checked ? 1 : 0})} className="w-5 h-5"/>
+                            <span>מנוי PRO</span>
                         </label>
                     </div>
 
-                    <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-                        <button type="button" onClick={onClose} className="px-6 py-2.5 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition">ביטול</button>
-                        <button type="submit" className="px-6 py-2.5 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">שמור שינויים</button>
+                    <div className="flex justify-end gap-3 mt-4 pt-2 border-t">
+                        <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">ביטול</button>
+                        <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">שמור</button>
                     </div>
                 </form>
             </div>
